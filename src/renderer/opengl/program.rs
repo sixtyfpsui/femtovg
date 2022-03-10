@@ -129,6 +129,10 @@ impl Drop for Program {
     }
 }
 
+pub trait ShaderCommon {
+    fn set_config(&self, config: &[f32]);
+}
+
 pub struct MainProgram {
     context: Rc<glow::Context>,
     program: Program,
@@ -182,9 +186,64 @@ impl MainProgram {
         }
     }
 
-    pub(crate) fn set_config(&self, config: &[f32]) {
+    pub(crate) fn bind(&self) {
+        self.program.bind();
+    }
+
+    pub(crate) fn unbind(&self) {
+        self.program.unbind();
+    }
+}
+
+impl ShaderCommon for MainProgram {
+    fn set_config(&self, config: &[f32]) {
         unsafe {
             self.context.uniform_4_f32_slice(Some(&self.loc_frag), config);
+        }
+    }
+}
+
+pub struct BlurProgram {
+    context: Rc<glow::Context>,
+    program: Program,
+    loc_viewsize: <glow::Context as glow::HasContext>::UniformLocation,
+    loc_tex: <glow::Context as glow::HasContext>::UniformLocation,
+    loc_frag: <glow::Context as glow::HasContext>::UniformLocation,
+}
+
+impl BlurProgram {
+    pub(crate) fn new(context: &Rc<glow::Context>) -> Result<Self, ErrorKind> {
+        let shader_defs = "#define SELECT_BLUR 1";
+        let vert_shader_src = format!("{}\n{}\n{}", GLSL_VERSION, shader_defs, include_str!("main-vs.glsl"));
+        let frag_shader_src = format!("{}\n{}\n{}", GLSL_VERSION, shader_defs, include_str!("main-fs.glsl"));
+
+        let vert_shader = Shader::new(context, &vert_shader_src, glow::VERTEX_SHADER)?;
+        let frag_shader = Shader::new(context, &frag_shader_src, glow::FRAGMENT_SHADER)?;
+
+        let program = Program::new(context, &[vert_shader, frag_shader], &["vertex", "tcoord"])?;
+
+        let loc_viewsize = program.uniform_location("viewSize")?;
+        let loc_tex = program.uniform_location("tex")?;
+        let loc_frag = program.uniform_location("frag")?;
+
+        Ok(Self {
+            context: context.clone(),
+            program,
+            loc_viewsize,
+            loc_tex,
+            loc_frag,
+        })
+    }
+
+    pub(crate) fn set_tex(&self, tex: i32) {
+        unsafe {
+            self.context.uniform_1_i32(Some(&self.loc_tex), tex);
+        }
+    }
+
+    pub(crate) fn set_view(&self, view: [f32; 2]) {
+        unsafe {
+            self.context.uniform_2_f32_slice(Some(&self.loc_viewsize), &view);
         }
     }
 
@@ -194,5 +253,13 @@ impl MainProgram {
 
     pub(crate) fn unbind(&self) {
         self.program.unbind();
+    }
+}
+
+impl ShaderCommon for BlurProgram {
+    fn set_config(&self, config: &[f32]) {
+        unsafe {
+            self.context.uniform_4_f32_slice(Some(&self.loc_frag), config);
+        }
     }
 }

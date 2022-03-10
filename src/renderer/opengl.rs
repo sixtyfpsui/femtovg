@@ -22,7 +22,7 @@ use glow::HasContext;
 use super::{Command, CommandType, Params, RenderTarget, Renderer, ShaderType};
 
 mod program;
-use program::MainProgram;
+use program::{BlurProgram, MainProgram, ShaderCommon};
 
 mod gl_texture;
 use gl_texture::GlTexture;
@@ -39,7 +39,8 @@ pub struct OpenGl {
     is_opengles_2_0: bool,
     view: [f32; 2],
     screen_view: [f32; 2],
-    main_program: MainProgram,
+    generic_program: Rc<MainProgram>, // TODO: remove this, replace with specialized variants
+    blur_program: Rc<BlurProgram>,
     vert_arr: Option<<glow::Context as glow::HasContext>::VertexArray>,
     vert_buff: Option<<glow::Context as glow::HasContext>::Buffer>,
     framebuffers: FnvHashMap<ImageId, Result<Framebuffer, ErrorKind>>,
@@ -93,7 +94,8 @@ impl OpenGl {
 
         let context = Rc::new(context);
 
-        let main_program = MainProgram::new(&context, antialias)?;
+        let generic_program = Rc::new(MainProgram::new(&context, antialias)?);
+        let blur_program = Rc::new(BlurProgram::new(&context)?);
 
         let mut opengl = OpenGl {
             debug: debug,
@@ -101,7 +103,8 @@ impl OpenGl {
             is_opengles_2_0: false,
             view: [0.0, 0.0],
             screen_view: [0.0, 0.0],
-            main_program: main_program,
+            generic_program: generic_program,
+            blur_program,
             vert_arr: Default::default(),
             vert_buff: Default::default(),
             framebuffers: Default::default(),
@@ -175,7 +178,7 @@ impl OpenGl {
     }
 
     fn convex_fill(&self, images: &ImageStore<GlTexture>, cmd: &Command, gpu_paint: &Params) {
-        self.set_uniforms(images, gpu_paint, cmd.image, cmd.glyph_texture);
+        self.set_uniforms(&*self.generic_program, images, gpu_paint, cmd.image, cmd.glyph_texture);
 
         for drawable in &cmd.drawables {
             if let Some((start, count)) = drawable.fill_verts {
@@ -204,7 +207,7 @@ impl OpenGl {
             //glow::DepthMask(glow::FALSE);
         }
 
-        self.set_uniforms(images, stencil_paint, None, GlyphTexture::None);
+        self.set_uniforms(&*self.generic_program, images, stencil_paint, None, GlyphTexture::None);
 
         unsafe {
             self.context
@@ -229,7 +232,7 @@ impl OpenGl {
             //glow::DepthMask(glow::TRUE);
         }
 
-        self.set_uniforms(images, fill_paint, cmd.image, cmd.glyph_texture);
+        self.set_uniforms(&*self.generic_program, images, fill_paint, cmd.image, cmd.glyph_texture);
 
         if self.antialias {
             unsafe {
@@ -272,7 +275,7 @@ impl OpenGl {
     }
 
     fn stroke(&self, images: &ImageStore<GlTexture>, cmd: &Command, paint: &Params) {
-        self.set_uniforms(images, paint, cmd.image, cmd.glyph_texture);
+        self.set_uniforms(&*self.generic_program, images, paint, cmd.image, cmd.glyph_texture);
 
         for drawable in &cmd.drawables {
             if let Some((start, count)) = drawable.stroke_verts {
@@ -296,7 +299,7 @@ impl OpenGl {
             self.context.stencil_op(glow::KEEP, glow::KEEP, glow::INCR);
         }
 
-        self.set_uniforms(images, paint2, cmd.image, cmd.glyph_texture);
+        self.set_uniforms(&*self.generic_program, images, paint2, cmd.image, cmd.glyph_texture);
 
         for drawable in &cmd.drawables {
             if let Some((start, count)) = drawable.stroke_verts {
@@ -308,7 +311,7 @@ impl OpenGl {
         }
 
         // Draw anti-aliased pixels.
-        self.set_uniforms(images, paint1, cmd.image, cmd.glyph_texture);
+        self.set_uniforms(&*self.generic_program, images, paint1, cmd.image, cmd.glyph_texture);
 
         unsafe {
             self.context.stencil_func(glow::EQUAL, 0x0, 0xff);
@@ -348,8 +351,8 @@ impl OpenGl {
         self.check_error("stencil_stroke");
     }
 
-    fn triangles(&self, images: &ImageStore<GlTexture>, cmd: &Command, paint: &Params) {
-        self.set_uniforms(images, paint, cmd.image, cmd.glyph_texture);
+    fn triangles(&self, shader: &dyn ShaderCommon, images: &ImageStore<GlTexture>, cmd: &Command, paint: &Params) {
+        self.set_uniforms(shader, images, paint, cmd.image, cmd.glyph_texture);
 
         if let Some((start, count)) = cmd.triangles_verts {
             unsafe {
@@ -362,13 +365,14 @@ impl OpenGl {
 
     fn set_uniforms(
         &self,
+        shader: &dyn ShaderCommon,
         images: &ImageStore<GlTexture>,
         paint: &Params,
         image_tex: Option<ImageId>,
         glyph_tex: GlyphTexture,
     ) {
         let arr = UniformArray::from(paint);
-        self.main_program.set_config(arr.as_slice());
+        shader.set_config(arr.as_slice());
         self.check_error("set_uniforms uniforms");
 
         let tex = image_tex
@@ -479,6 +483,7 @@ impl OpenGl {
         target_image: ImageId,
         sigma: f32,
     ) {
+        self.blur_program.bind();
         let original_render_target = self.current_render_target;
 
         // The filtering happens in two passes, first a horizontal blur and then the vertial blur. The
@@ -514,7 +519,7 @@ impl OpenGl {
 
         let horizontal_blur_buffer = images.alloc(self, source_image_info).unwrap();
         self.set_target(images, RenderTarget::Image(horizontal_blur_buffer));
-        self.main_program.set_view(self.view);
+        self.blur_program.set_view(self.view);
 
         self.clear_rect(
             0,
@@ -524,10 +529,10 @@ impl OpenGl {
             Color::rgbaf(0., 0., 0., 0.),
         );
 
-        self.triangles(images, &cmd, &blur_params);
+        self.triangles(&*self.blur_program, images, &cmd, &blur_params);
 
         self.set_target(images, RenderTarget::Image(target_image));
-        self.main_program.set_view(self.view);
+        self.blur_program.set_view(self.view);
 
         self.clear_rect(
             0,
@@ -541,13 +546,14 @@ impl OpenGl {
 
         cmd.image = Some(horizontal_blur_buffer);
 
-        self.triangles(images, &cmd, &blur_params);
+        self.triangles(&*self.blur_program, images, &cmd, &blur_params);
 
         images.remove(self, horizontal_blur_buffer);
 
         // restore previous render target and view
         self.set_target(images, original_render_target);
-        self.main_program.set_view(self.view);
+        self.generic_program.bind();
+        self.generic_program.set_view(self.view);
     }
 }
 
@@ -567,8 +573,6 @@ impl Renderer for OpenGl {
     }
 
     fn render(&mut self, images: &mut ImageStore<Self::Image>, verts: &[Vertex], commands: Vec<Command>) {
-        self.main_program.bind();
-
         unsafe {
             self.context.enable(glow::CULL_FACE);
 
@@ -610,8 +614,11 @@ impl Renderer for OpenGl {
         }
 
         // Bind the two uniform samplers to texture units
-        self.main_program.set_tex(0);
-        self.main_program.set_glyphtex(1);
+        self.blur_program.bind();
+        self.blur_program.set_tex(0);
+        self.generic_program.bind();
+        self.generic_program.set_tex(0);
+        self.generic_program.set_glyphtex(1);
 
         self.check_error("render prepare");
 
@@ -629,7 +636,7 @@ impl Renderer for OpenGl {
                     ref params1,
                     ref params2,
                 } => self.stencil_stroke(images, &cmd, params1, params2),
-                CommandType::Triangles { ref params } => self.triangles(images, &cmd, params),
+                CommandType::Triangles { ref params } => self.triangles(&*self.generic_program, images, &cmd, params),
                 CommandType::ClearRect {
                     x,
                     y,
@@ -641,7 +648,7 @@ impl Renderer for OpenGl {
                 }
                 CommandType::SetRenderTarget(target) => {
                     self.set_target(images, target);
-                    self.main_program.set_view(self.view);
+                    self.generic_program.set_view(self.view);
                 }
                 CommandType::RenderFilteredImage { target_image, filter } => {
                     self.render_filtered_image(images, cmd, target_image, filter)
@@ -659,7 +666,7 @@ impl Renderer for OpenGl {
             self.context.bind_texture(glow::TEXTURE_2D, None);
         }
 
-        self.main_program.unbind();
+        self.generic_program.unbind();
 
         self.check_error("render done");
     }
