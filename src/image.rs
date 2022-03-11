@@ -131,7 +131,7 @@ pub struct ImageInfo {
     flags: ImageFlags,
     width: usize,
     height: usize,
-    format: PixelFormat,
+    pub(crate) format: PixelFormat,
 }
 
 impl ImageInfo {

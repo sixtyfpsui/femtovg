@@ -136,6 +136,7 @@ pub struct MainProgram {
     loc_tex: <glow::Context as glow::HasContext>::UniformLocation,
     loc_glyphtex: <glow::Context as glow::HasContext>::UniformLocation,
     loc_frag: <glow::Context as glow::HasContext>::UniformLocation,
+    loc_depth: <glow::Context as glow::HasContext>::UniformLocation,
 }
 
 impl MainProgram {
@@ -153,6 +154,7 @@ impl MainProgram {
         let loc_tex = program.uniform_location("tex")?;
         let loc_glyphtex = program.uniform_location("glyphtex")?;
         let loc_frag = program.uniform_location("frag")?;
+        let loc_depth = program.uniform_location("depth")?;
 
         Ok(Self {
             context: context.clone(),
@@ -161,6 +163,7 @@ impl MainProgram {
             loc_tex,
             loc_glyphtex,
             loc_frag,
+            loc_depth,
         })
     }
 
@@ -185,6 +188,12 @@ impl MainProgram {
     pub(crate) fn set_config(&self, config: &[f32]) {
         unsafe {
             self.context.uniform_4_f32_slice(Some(&self.loc_frag), config);
+        }
+    }
+
+    pub(crate) fn set_depth(&self, depth: f32) {
+        unsafe {
+            self.context.uniform_3_f32(Some(&self.loc_depth), 0., 0., depth)
         }
     }
 

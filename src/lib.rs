@@ -855,7 +855,7 @@ where
         } else {
             let mut stencil_params = Params::default();
             stencil_params.stroke_thr = -1.0;
-            stencil_params.shader_type = ShaderType::Stencil.to_f32();
+            stencil_params.shader_type = ShaderType::Stencil;
 
             let fill_params = Params::new(
                 &self.images,

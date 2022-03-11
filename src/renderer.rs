@@ -78,6 +78,18 @@ impl Command {
             composite_operation: Default::default(),
         }
     }
+    pub fn is_opaque(&self) -> bool {
+        match self.cmd_type {
+            CommandType::SetRenderTarget(_) => false,
+            CommandType::ClearRect { color, .. } => color.is_opaque(),
+            CommandType::ConvexFill { params } => params.is_opaque(),
+            CommandType::ConcaveFill { stencil_params, fill_params } => stencil_params.is_opaque() && fill_params.is_opaque(),
+            CommandType::Stroke { params } => params.is_opaque(),
+            CommandType::StencilStroke { params1, params2 } => params1.is_opaque() && params2.is_opaque(),
+            CommandType::Triangles { params } => params.is_opaque(),
+            CommandType::RenderFilteredImage { target_image, filter } => false,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]

@@ -33,6 +33,58 @@ use framebuffer::Framebuffer;
 mod uniform_array;
 use uniform_array::UniformArray;
 
+pub enum GLCommand {
+    BeginDepthTest,
+    RenderCommand { z: f32, cmd: Command },
+    EndDepthTest,
+}
+
+#[derive(Default)]
+struct OpaqueCommandBatch(Vec<Command>);
+
+impl OpaqueCommandBatch {
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    fn flush(&mut self, output: &mut impl Extend<GLCommand>) {
+        let has_multiple_items = self.0.len() > 1;
+
+        let z_range = self.0.len() as f32;
+
+        if has_multiple_items {
+            output.extend(std::iter::once(GLCommand::BeginDepthTest));
+        }
+
+        let command_iter = self
+            .0
+            .drain(0..)
+            .enumerate()
+            .map(move |(index, cmd)| {
+                debug_assert!(cmd.is_opaque());
+                let z = 1.0 - ((index as f32) / z_range);
+                GLCommand::RenderCommand { cmd, z }
+            })
+            .rev();
+
+        if has_multiple_items {
+            output.extend(command_iter.inspect(|glcmd| match glcmd {
+                GLCommand::BeginDepthTest => unreachable!(),
+                GLCommand::RenderCommand { z, .. } => {/*eprintln!("z {}", z)*/},
+                GLCommand::EndDepthTest => unreachable!(),
+            }));
+        } else {
+            output.extend(command_iter);
+        }
+
+        if has_multiple_items {
+            output.extend(std::iter::once(GLCommand::EndDepthTest));
+        }
+    }
+    fn push(&mut self, command: Command) {
+        self.0.push(command)
+    }
+}
+
 pub struct OpenGl {
     debug: bool,
     antialias: bool,
@@ -496,7 +548,7 @@ impl OpenGl {
             1.,
         );
         let mut blur_params = Params::new(images, &image_paint, &Scissor::default(), 0., 0., 0.);
-        blur_params.shader_type = ShaderType::FilterImage.to_f32();
+        blur_params.shader_type = ShaderType::FilterImage;
 
         let gauss_coeff_x = 1. / ((2. * std::f32::consts::PI).sqrt() * sigma);
         let gauss_coeff_y = f32::exp(-0.5 / (sigma * sigma));
@@ -566,7 +618,61 @@ impl Renderer for OpenGl {
         }
     }
 
-    fn render(&mut self, images: &mut ImageStore<Self::Image>, verts: &[Vertex], commands: Vec<Command>) {
+    fn render(&mut self, images: &mut ImageStore<Self::Image>, verts: &[Vertex], render_commands: Vec<Command>) {
+        let mut commands: Vec<GLCommand> = Vec::with_capacity(render_commands.len());
+
+        /*
+        commands.extend(
+            render_commands
+                .into_iter()
+                .map(|c| GLCommand::RenderCommand { cmd: c, z: 0.0 }),
+        );
+        */
+
+        {
+            //eprintln!("flush {}", commands.len());
+            let mut opaque_batch = OpaqueCommandBatch::default();
+
+            let mut render_target = RenderTarget::Screen;
+            for command in render_commands.into_iter() {
+                match &command {
+                    Command {
+                        cmd_type: CommandType::SetRenderTarget(new_target),
+                        ..
+                    } => {
+                        if *new_target != render_target {
+                            //eprintln!("change in render target at {} from {:#?} to {:#?}", i, render_target, new_target);
+                            render_target = *new_target;
+
+                            if !opaque_batch.is_empty() {
+                                //eprintln!("opaque batch before SetRenderTarget");
+                                opaque_batch.flush(&mut commands);
+                            }
+
+                            commands.push(GLCommand::RenderCommand { cmd: command, z: 0.0 });
+                            continue;
+                        }
+                    }
+                    _ => {}
+                }
+
+                let opaque = command.is_opaque();
+                if opaque {
+                    opaque_batch.push(command);
+                } else {
+                    if !opaque_batch.is_empty() {
+                        //eprintln!("opaque group");
+                        opaque_batch.flush(&mut commands);
+                    }
+                    commands.push(GLCommand::RenderCommand { cmd: command, z: 0.0 });
+                }
+            }
+            if !opaque_batch.is_empty() {
+                //eprintln!("last opaque group");
+                opaque_batch.flush(&mut commands);
+            }
+        }
+
         self.main_program.bind();
 
         unsafe {
@@ -612,10 +718,28 @@ impl Renderer for OpenGl {
         // Bind the two uniform samplers to texture units
         self.main_program.set_tex(0);
         self.main_program.set_glyphtex(1);
+        self.main_program.set_depth(0.);
 
         self.check_error("render prepare");
 
-        for cmd in commands.into_iter() {
+        for gl_cmd in commands.into_iter() {
+            let cmd = match gl_cmd {
+                GLCommand::BeginDepthTest => unsafe {
+                    self.context.clear_depth_f32(1.0);
+                    self.context.clear(glow::DEPTH_BUFFER_BIT);
+                    self.context.enable(glow::DEPTH_TEST);
+                    continue;
+                },
+                GLCommand::RenderCommand { z, cmd } => {
+                    self.main_program.set_depth(z);
+                    cmd
+                }
+                GLCommand::EndDepthTest => unsafe {
+                    self.context.disable(glow::DEPTH_TEST);
+                    continue;
+                },
+            };
+
             self.set_composite_operation(cmd.composite_operation);
 
             match cmd.cmd_type {

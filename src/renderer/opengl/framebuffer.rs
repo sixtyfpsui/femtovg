@@ -42,12 +42,12 @@ impl Framebuffer {
         let stencil_rbo = unsafe { context.create_renderbuffer().unwrap() };
         unsafe {
             context.bind_renderbuffer(glow::RENDERBUFFER, Some(stencil_rbo));
-            context.renderbuffer_storage(glow::RENDERBUFFER, glow::STENCIL_INDEX8, width as i32, height as i32);
+            context.renderbuffer_storage(glow::RENDERBUFFER, glow::DEPTH24_STENCIL8, width as i32, height as i32);
             context.bind_renderbuffer(glow::RENDERBUFFER, None);
 
             context.framebuffer_renderbuffer(
                 glow::FRAMEBUFFER,
-                glow::STENCIL_ATTACHMENT,
+                glow::DEPTH_STENCIL_ATTACHMENT,
                 glow::RENDERBUFFER,
                 Some(stencil_rbo),
             );

@@ -121,6 +121,10 @@ impl Color {
     pub fn is_black(&self) -> bool {
         self.r == 0.0 && self.g == 0.0 && self.b == 0.0 && self.a == 0.0
     }
+
+    pub(crate) fn is_opaque(&self) -> bool {
+        self.a == 1.0
+    }
 }
 
 impl Default for Color {

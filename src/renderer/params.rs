@@ -1,6 +1,6 @@
 use crate::{
     paint::{GlyphTexture, GradientColors},
-    ImageFlags, ImageStore, Paint, PaintFlavor, PixelFormat, Scissor, Transform2D,
+    ImageFlags, ImageStore, Paint, PaintFlavor, PixelFormat, Scissor, Transform2D, ImageInfo,
 };
 
 use super::ShaderType;
@@ -19,11 +19,12 @@ pub struct Params {
     pub(crate) stroke_mult: f32,
     pub(crate) stroke_thr: f32,
     pub(crate) tex_type: f32,
-    pub(crate) shader_type: f32,
+    pub(crate) shader_type: ShaderType,
     pub(crate) glyph_texture_type: f32, // 0 -> no glyph rendering, 1 -> alpha mask, 2 -> color texture
     pub(crate) image_blur_filter_direction: [f32; 2],
     pub(crate) image_blur_filter_sigma: f32,
     pub(crate) image_blur_filter_coeff: [f32; 3],
+    pub(crate) image_info: Option<ImageInfo>,
 }
 
 impl Params {
@@ -76,7 +77,7 @@ impl Params {
                 let color = color.premultiplied().to_array();
                 params.inner_col = color;
                 params.outer_col = color;
-                params.shader_type = ShaderType::FillGradient.to_f32();
+                params.shader_type = ShaderType::FillGradient;
                 inv_transform = paint.transform.inversed();
             }
             PaintFlavor::Image {
@@ -124,7 +125,7 @@ impl Params {
                     inv_transform = transform.inversed();
                 }
 
-                params.shader_type = ShaderType::FillImage.to_f32();
+                params.shader_type = ShaderType::FillImage;
 
                 params.tex_type = match image_info.format() {
                     PixelFormat::Rgba8 => {
@@ -137,6 +138,7 @@ impl Params {
                     PixelFormat::Gray8 => 2.0,
                     _ => 0.0,
                 };
+                params.image_info = Some(image_info);
             }
             PaintFlavor::LinearGradient {
                 start_x,
@@ -172,10 +174,10 @@ impl Params {
                     GradientColors::TwoStop { start_color, end_color } => {
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
-                        params.shader_type = ShaderType::FillGradient.to_f32();
+                        params.shader_type = ShaderType::FillGradient;
                     }
                     GradientColors::MultiStop { .. } => {
-                        params.shader_type = ShaderType::FillImageGradient.to_f32();
+                        params.shader_type = ShaderType::FillImageGradient;
                     }
                 }
             }
@@ -200,10 +202,10 @@ impl Params {
                     GradientColors::TwoStop { start_color, end_color } => {
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
-                        params.shader_type = ShaderType::FillGradient.to_f32();
+                        params.shader_type = ShaderType::FillGradient;
                     }
                     GradientColors::MultiStop { .. } => {
-                        params.shader_type = ShaderType::FillImageGradient.to_f32();
+                        params.shader_type = ShaderType::FillImageGradient;
                     }
                 }
             }
@@ -229,10 +231,10 @@ impl Params {
                     GradientColors::TwoStop { start_color, end_color } => {
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
-                        params.shader_type = ShaderType::FillGradient.to_f32();
+                        params.shader_type = ShaderType::FillGradient;
                     }
                     GradientColors::MultiStop { .. } => {
-                        params.shader_type = ShaderType::FillImageGradient.to_f32();
+                        params.shader_type = ShaderType::FillImageGradient;
                     }
                 }
             }
@@ -241,5 +243,15 @@ impl Params {
         params.paint_mat = inv_transform.to_mat3x4();
 
         params
+    }
+
+    pub fn is_opaque(&self) -> bool {
+        match self.shader_type {
+            ShaderType::FillGradient => self.inner_col[3] == 1.0 && self.outer_col[3] == 1.0,
+            ShaderType::FillImage => self.inner_col[3] == 1.0 && self.image_info.as_ref().map_or(false, |info| info.format == PixelFormat::Rgb8),
+            ShaderType::Stencil  => false,
+            ShaderType::FillImageGradient  => false,
+            ShaderType::FilterImage  => false,
+        }
     }
 }
