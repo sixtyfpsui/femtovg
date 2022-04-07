@@ -567,6 +567,57 @@ impl Renderer for OpenGl {
     }
 
     fn render(&mut self, images: &mut ImageStore<Self::Image>, verts: &[Vertex], commands: Vec<Command>) {
+        log::trace!("commands:");
+        for cmd in &commands {
+            let paint_type = |param: &Params| {
+                if param.shader_type == ShaderType::FillGradient.to_f32() {
+                    "fill gradient"
+                } else if param.shader_type == ShaderType::FillImage.to_f32() {
+                    "fill image"
+                } else if param.shader_type == ShaderType::Stencil.to_f32() {
+                    "fill stencil"
+                } else if param.shader_type == ShaderType::FillImageGradient.to_f32() {
+                    "fill image gradient"
+                } else if param.shader_type == ShaderType::FilterImage.to_f32() {
+                    "filter image"
+                } else if param.shader_type == ShaderType::FillColor.to_f32() {
+                    "fill color"
+                } else if param.shader_type == ShaderType::TextureCopyUnclipped.to_f32() {
+                    "unclipped texture copy"
+                } else {
+                    "UNKNOWN PAINT"
+                }
+            };
+
+            match cmd.cmd_type {
+                CommandType::SetRenderTarget(_) => log::trace!("    set_render_target"),
+                CommandType::ClearRect { .. } => log::trace!("    clear_rect"),
+                CommandType::ConvexFill { params } => {
+                    let (stroke_count, fill_count) =
+                        cmd.drawables
+                            .iter()
+                            .fold((0, 0), |(stroke_count, fill_count), drawable| {
+                                (
+                                    stroke_count + drawable.stroke_verts.map_or(0, |_| 1),
+                                    fill_count + drawable.fill_verts.map_or(0, |_| 1),
+                                )
+                            });
+                    log::trace!(
+                        "    convex fill ({} stroke / {} fill) paint = {}",
+                        stroke_count,
+                        fill_count,
+                        paint_type(&params),
+                    )
+                }
+
+                CommandType::ConcaveFill { .. } => log::trace!("    concave fill (stencil)"),
+                CommandType::Stroke { .. } => log::trace!("    stroke"),
+                CommandType::StencilStroke { .. } => log::trace!("    stencil stroke"),
+                CommandType::Triangles { params } => log::trace!("    triangles ; paint = {}", paint_type(&params),),
+                CommandType::RenderFilteredImage { .. } => log::trace!("    render filtered image"),
+            }
+        }
+
         self.main_program.bind();
 
         unsafe {
