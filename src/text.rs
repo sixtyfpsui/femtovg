@@ -1,6 +1,7 @@
 use std::{
     borrow::Borrow,
     cell::RefCell,
+    convert::TryInto,
     ffi::OsStr,
     fs,
     hash::{Hash, Hasher},
@@ -98,7 +99,7 @@ impl Default for RenderMode {
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub(crate) struct RenderedGlyphId {
-    glyph_index: u32,
+    glyph_index: u16,
     font_id: FontId,
     size: u32,
     line_width: u32,
@@ -108,7 +109,7 @@ pub(crate) struct RenderedGlyphId {
 
 impl RenderedGlyphId {
     fn new(
-        glyph_index: u32,
+        glyph_index: u16,
         font_id: FontId,
         font_size: f32,
         line_width: f32,
@@ -144,7 +145,7 @@ pub struct ShapedGlyph {
     pub c: char,
     pub byte_index: usize,
     pub font_id: FontId,
-    pub codepoint: u32,
+    pub glyph_id: u16,
     pub width: f32,
     pub height: f32,
     pub advance_x: f32,
@@ -765,7 +766,10 @@ fn shape_word(
                 c,
                 byte_index: info.cluster as usize,
                 font_id,
-                codepoint: info.glyph_id,
+                glyph_id: info
+                    .glyph_id
+                    .try_into()
+                    .expect("rustybuzz guarantees the output glyph id is u16"),
                 width: 0.0,
                 height: 0.0,
                 advance_x: position.x_advance as f32 * scale,
@@ -777,7 +781,7 @@ fn shape_word(
                 bitmap_glyph: false,
             };
 
-            if let Some(glyph) = font.glyph(&face, info.glyph_id as u16) {
+            if let Some(glyph) = font.glyph(&face, g.glyph_id) {
                 g.width = glyph.metrics.width * scale;
                 g.height = glyph.metrics.height * scale;
                 g.bearing_x = glyph.metrics.bearing_x * scale;
@@ -916,7 +920,7 @@ impl GlyphAtlas {
             let subpixel_location = crate::geometry::quantize(glyph.x.fract(), 0.1) * 10.0;
 
             let id = RenderedGlyphId::new(
-                glyph.codepoint,
+                glyph.glyph_id,
                 glyph.font_id,
                 font_size,
                 line_width,
@@ -998,7 +1002,7 @@ impl GlyphAtlas {
             let scale = font.scale(font_size);
 
             let maybe_glyph_representation =
-                font.glyph_rendering_representation(&face, glyph.codepoint as u16, font_size as u16);
+                font.glyph_rendering_representation(&face, glyph.glyph_id, font_size as u16);
             (maybe_glyph_representation, scale)
         };
 
@@ -1251,7 +1255,7 @@ pub(crate) fn render_direct<T: Renderer>(
             let scale = font.scale(font_size);
 
             let glyph_rendering = if let Some(glyph_rendering) =
-                font.glyph_rendering_representation(&face, glyph.codepoint as u16, font_size as u16)
+                font.glyph_rendering_representation(&face, glyph.glyph_id, font_size as u16)
             {
                 glyph_rendering
             } else {
