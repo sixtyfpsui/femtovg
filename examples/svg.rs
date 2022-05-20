@@ -135,12 +135,12 @@ fn main() {
                 for (path, fill, stroke) in &mut paths {
                     if let Some(fill) = fill {
                         fill.set_anti_alias(true);
-                        canvas.fill_path(path, *fill);
+                        canvas.fill_path(path, fill.clone());
                     }
 
                     if let Some(stroke) = stroke {
                         stroke.set_anti_alias(true);
-                        canvas.stroke_path(path, *stroke);
+                        canvas.stroke_path(path, stroke.clone());
                     }
 
                     if canvas.contains_point(path, mousex, mousey, FillRule::NonZero) {

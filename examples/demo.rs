@@ -411,10 +411,12 @@ fn draw_paragraph<T: Renderer>(
     let mut px;
     let mut caret_x;
 
-    let lines = canvas.break_text_vec(width, text, paint).expect("Cannot break text");
+    let lines = canvas
+        .break_text_vec(width, text, paint.clone())
+        .expect("Cannot break text");
 
     for (line_num, line_range) in lines.into_iter().enumerate() {
-        if let Ok(res) = canvas.fill_text(x, y, &text[line_range], paint) {
+        if let Ok(res) = canvas.fill_text(x, y, &text[line_range], paint.clone()) {
             let hit = mx > x && mx < (x + width) && my >= y && my < (y + res.height());
 
             if hit {
@@ -455,7 +457,7 @@ fn draw_paragraph<T: Renderer>(
 
         let text = format!("{}", gutter);
 
-        if let Ok(res) = canvas.measure_text(x - 10.0, gutter_y, &text, paint) {
+        if let Ok(res) = canvas.measure_text(x - 10.0, gutter_y, &text, paint.clone()) {
             let mut path = Path::new();
             path.rounded_rect(
                 res.x - 4.0,
@@ -464,7 +466,7 @@ fn draw_paragraph<T: Renderer>(
                 res.height() + 4.0,
                 (res.height() + 4.0) / 2.0 - 1.0,
             );
-            canvas.fill_path(&mut path, paint);
+            canvas.fill_path(&mut path, paint.clone());
 
             paint.set_color(Color::rgba(32, 32, 32, 255));
             let _ = canvas.fill_text(x - 10.0, gutter_y, &text, paint);
@@ -714,7 +716,7 @@ fn draw_window<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, title: &str, 
 
     let _ = canvas.fill_text(x + (w / 2.0), y + 19.0, title, text_paint);
 
-    // let bounds = canvas.text_bounds(x + (w / 2.0), y + 19.0, title, text_paint);
+    // let bounds = canvas.text_bounds(x + (w / 2.0), y + 19.0, title, &text_paint);
     //
     // let mut path = Path::new();
     // path.rect(bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]);
@@ -974,8 +976,8 @@ fn draw_edit_box_num<T: Renderer>(
     paint.set_text_align(Align::Right);
     paint.set_text_baseline(Baseline::Middle);
 
-    if let Ok(layout) = canvas.measure_text(0.0, 0.0, units, paint) {
-        let _ = canvas.fill_text(x + w - h * 0.3, y + h * 0.5, units, paint);
+    if let Ok(layout) = canvas.measure_text(0.0, 0.0, units, paint.clone()) {
+        let _ = canvas.fill_text(x + w - h * 0.3, y + h * 0.5, units, paint.clone());
 
         paint.set_font_size(16.0);
         paint.set_color(Color::rgba(255, 255, 255, 128));
@@ -1050,7 +1052,7 @@ fn draw_button<T: Renderer>(
     paint.set_text_align(Align::Left);
     paint.set_text_baseline(Baseline::Middle);
 
-    let tw = if let Ok(layout) = canvas.measure_text(0.0, 0.0, text, paint) {
+    let tw = if let Ok(layout) = canvas.measure_text(0.0, 0.0, text, paint.clone()) {
         layout.width()
     } else {
         0.0
@@ -1062,17 +1064,22 @@ fn draw_button<T: Renderer>(
         paint.set_font(&[fonts.icons]);
         paint.set_font_size(h * 1.3);
 
-        if let Ok(layout) = canvas.measure_text(0.0, 0.0, icon, paint) {
+        if let Ok(layout) = canvas.measure_text(0.0, 0.0, icon, paint.clone()) {
             iw = layout.width() + (h * 0.15);
         }
 
-        let _ = canvas.fill_text(x + w * 0.5 - tw * 0.5 - iw * 0.75, y + h * 0.5, icon, paint);
+        let _ = canvas.fill_text(x + w * 0.5 - tw * 0.5 - iw * 0.75, y + h * 0.5, icon, paint.clone());
     }
 
     paint.set_font_size(15.0);
     paint.set_font(&[fonts.regular]);
     paint.set_color(Color::rgba(0, 0, 0, 160));
-    let _ = canvas.fill_text(x + w * 0.5 - tw * 0.5 + iw * 0.25, y + h * 0.5 - 1.0, text, paint);
+    let _ = canvas.fill_text(
+        x + w * 0.5 - tw * 0.5 + iw * 0.25,
+        y + h * 0.5 - 1.0,
+        text,
+        paint.clone(),
+    );
     paint.set_color(Color::rgba(255, 255, 255, 160));
     let _ = canvas.fill_text(x + w * 0.5 - tw * 0.5 + iw * 0.25, y + h * 0.5, text, paint);
 }
@@ -1338,7 +1345,7 @@ fn draw_lines<T: Renderer>(canvas: &mut Canvas<T>, x: f32, y: f32, w: f32, _h: f
             path.line_to(fx + pts[2], fy + pts[3]);
             path.line_to(fx + pts[4], fy + pts[5]);
             path.line_to(fx + pts[6], fy + pts[7]);
-            canvas.stroke_path(&mut path, paint);
+            canvas.stroke_path(&mut path, paint.clone());
 
             paint.set_line_cap(LineCap::Butt);
             paint.set_line_join(LineJoin::Bevel);
@@ -1403,10 +1410,9 @@ fn draw_fills<T: Renderer>(canvas: &mut Canvas<T>, x: f32, y: f32, mousex: f32, 
 fn draw_widths<T: Renderer>(canvas: &mut Canvas<T>, x: f32, mut y: f32, width: f32) {
     canvas.save();
 
-    let mut paint = Paint::color(Color::rgba(0, 0, 0, 255));
-
     for i in 0..20 {
         let w = (i as f32 + 0.5) * 0.1;
+        let mut paint = Paint::color(Color::rgba(0, 0, 0, 255));
         paint.set_line_width(w);
         let mut path = Path::new();
         path.move_to(x, y);
@@ -1436,6 +1442,7 @@ fn draw_caps<T: Renderer>(canvas: &mut Canvas<T>, x: f32, y: f32, width: f32) {
     paint.set_line_width(line_width);
 
     for (i, cap) in caps.iter().enumerate() {
+        let mut paint = paint.clone();
         paint.set_line_cap(*cap);
         let mut path = Path::new();
         path.move_to(x, y + i as f32 * 10.0 + 5.0);

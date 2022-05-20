@@ -175,7 +175,7 @@ fn text_measure_without_canvas() {
     test_paint.set_font_size(16.);
 
     let metrics = text_context
-        .measure_text(0., 0., "Hello World", test_paint)
+        .measure_text(0., 0., "Hello World", &test_paint)
         .expect("text shaping failed unexpectedly");
 
     assert_eq!(metrics.width().ceil(), 83.);
@@ -195,7 +195,7 @@ fn font_measure_without_canvas() {
     test_paint.set_font_size(16.);
 
     let metrics = text_context
-        .measure_font(test_paint)
+        .measure_font(&test_paint)
         .expect("font measuring failed unexpectedly");
 
     assert_eq!(metrics.ascender().ceil(), 17.);
@@ -216,7 +216,7 @@ fn break_text_without_canvas() {
     let text = "Multiple Lines Broken";
 
     let breaks = text_context
-        .break_text_vec(60., text, test_paint)
+        .break_text_vec(60., text, &test_paint)
         .expect("text shaping failed unexpectedly");
 
     assert_eq!(

@@ -1175,14 +1175,8 @@ where
     }
 
     /// Returns information on how the provided text will be drawn with the specified paint.
-    pub fn measure_text<S: AsRef<str>>(
-        &self,
-        x: f32,
-        y: f32,
-        text: S,
-        mut paint: Paint,
-    ) -> Result<TextMetrics, ErrorKind> {
-        self.transform_text_paint(&mut paint);
+    pub fn measure_text<S: AsRef<str>>(&self, x: f32, y: f32, text: S, paint: Paint) -> Result<TextMetrics, ErrorKind> {
+        let paint = self.transform_text_paint(paint);
 
         let text = text.as_ref();
         let scale = self.font_scale() * self.device_px_ratio;
@@ -1191,7 +1185,7 @@ where
         self.text_context
             .as_ref()
             .borrow_mut()
-            .measure_text(x * scale, y * scale, text, paint)
+            .measure_text(x * scale, y * scale, text, &paint)
             .map(|mut metrics| {
                 metrics.scale(invscale);
                 metrics
@@ -1199,17 +1193,17 @@ where
     }
 
     /// Returns font metrics for a particular Paint.
-    pub fn measure_font(&self, mut paint: Paint) -> Result<FontMetrics, ErrorKind> {
-        self.transform_text_paint(&mut paint);
+    pub fn measure_font(&self, paint: Paint) -> Result<FontMetrics, ErrorKind> {
+        let paint = self.transform_text_paint(paint);
 
-        self.text_context.as_ref().borrow_mut().measure_font(paint)
+        self.text_context.as_ref().borrow_mut().measure_font(&paint)
     }
 
     /// Returns the maximum index-th byte of text that will fit inside max_width.
     ///
     /// The retuned index will always lie at the start and/or end of a UTF-8 code point sequence or at the start or end of the text
-    pub fn break_text<S: AsRef<str>>(&self, max_width: f32, text: S, mut paint: Paint) -> Result<usize, ErrorKind> {
-        self.transform_text_paint(&mut paint);
+    pub fn break_text<S: AsRef<str>>(&self, max_width: f32, text: S, paint: Paint) -> Result<usize, ErrorKind> {
+        let paint = self.transform_text_paint(paint);
 
         let text = text.as_ref();
         let scale = self.font_scale() * self.device_px_ratio;
@@ -1218,7 +1212,7 @@ where
         self.text_context
             .as_ref()
             .borrow_mut()
-            .break_text(max_width, text, paint)
+            .break_text(max_width, text, &paint)
     }
 
     /// Returnes a list of ranges representing each line of text that will fit inside max_width
@@ -1226,9 +1220,9 @@ where
         &self,
         max_width: f32,
         text: S,
-        mut paint: Paint,
+        paint: Paint,
     ) -> Result<Vec<Range<usize>>, ErrorKind> {
-        self.transform_text_paint(&mut paint);
+        let paint = self.transform_text_paint(paint);
 
         let text = text.as_ref();
         let scale = self.font_scale() * self.device_px_ratio;
@@ -1237,7 +1231,7 @@ where
         self.text_context
             .as_ref()
             .borrow_mut()
-            .break_text_vec(max_width, text, paint)
+            .break_text_vec(max_width, text, &paint)
     }
 
     /// Fills the provided string with the specified Paint.
@@ -1264,11 +1258,12 @@ where
 
     // Private
 
-    fn transform_text_paint(&self, paint: &mut Paint) {
+    fn transform_text_paint(&self, mut paint: Paint) -> Paint {
         let scale = self.font_scale() * self.device_px_ratio;
         paint.font_size *= scale;
         paint.letter_spacing *= scale;
         paint.line_width *= scale;
+        paint
     }
 
     fn draw_text(
@@ -1276,14 +1271,14 @@ where
         x: f32,
         y: f32,
         text: &str,
-        mut paint: Paint,
+        paint: Paint,
         render_mode: RenderMode,
     ) -> Result<TextMetrics, ErrorKind> {
         let transform = self.state().transform;
         let scale = self.font_scale() * self.device_px_ratio;
         let invscale = 1.0 / scale;
 
-        self.transform_text_paint(&mut paint);
+        let mut paint = self.transform_text_paint(paint);
 
         let mut layout = text::shape(
             x * scale,
@@ -1301,7 +1296,7 @@ where
         let need_direct_rendering = paint.font_size > 92.0;
 
         if need_direct_rendering && !bitmap_glyphs {
-            text::render_direct(self, &layout, &paint, render_mode, invscale)?;
+            text::render_direct(self, &layout, paint, render_mode, invscale)?;
         } else {
             let create_vertices = |quads: &Vec<text::Quad>| {
                 let mut verts = Vec::with_capacity(quads.len() * 6);

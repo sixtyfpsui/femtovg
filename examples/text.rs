@@ -169,7 +169,7 @@ fn main() {
                     size.width as f32 - 10.0,
                     10.0,
                     format!("Scroll to increase / decrease font size. Current: {}", font_size),
-                    paint,
+                    paint.clone(),
                 );
                 #[cfg(feature = "debug_inspector")]
                 let _ = canvas.fill_text(
@@ -231,6 +231,7 @@ fn draw_baselines<T: Renderer>(
         path.line_to(x + 250., y + 0.5);
         canvas.stroke_path(&mut path, Paint::color(Color::rgba(255, 32, 32, 128)));
 
+        let mut paint = paint.clone();
         paint.set_text_baseline(*baseline);
 
         if let Ok(res) = canvas.fill_text(x, y, format!("{} Baseline::{:?}", base_text, baseline), paint) {
@@ -256,6 +257,7 @@ fn draw_alignments<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, x: f32, y
     paint.set_font_size(font_size);
 
     for (i, alignment) in alignments.iter().enumerate() {
+        let mut paint = paint.clone();
         paint.set_text_align(*alignment);
 
         if let Ok(res) = canvas.fill_text(x, y + i as f32 * 30.0, format!("Align::{:?}", alignment), paint) {
@@ -272,17 +274,17 @@ fn draw_paragraph<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, x: f32, y:
     //paint.set_text_align(Align::Right);
     paint.set_font_size(font_size);
 
-    let font_metrics = canvas.measure_font(paint).expect("Error measuring font");
+    let font_metrics = canvas.measure_font(paint.clone()).expect("Error measuring font");
 
     let width = canvas.width();
     let mut y = y;
 
     let lines = canvas
-        .break_text_vec(width, text, paint)
+        .break_text_vec(width, text, paint.clone())
         .expect("Error while breaking text");
 
     for line_range in lines {
-        if let Ok(_res) = canvas.fill_text(x, y, &text[line_range], paint) {
+        if let Ok(_res) = canvas.fill_text(x, y, &text[line_range], paint.clone()) {
             y += font_metrics.height();
         }
     }
@@ -312,9 +314,14 @@ fn draw_inc_size<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, x: f32, y: 
         paint.set_font(&[fonts.sans]);
         paint.set_font_size(i as f32);
 
-        let font_metrics = canvas.measure_font(paint).expect("Error measuring font");
+        let font_metrics = canvas.measure_font(paint.clone()).expect("Error measuring font");
 
-        if let Ok(_res) = canvas.fill_text(x, cursor_y, "The quick brown fox jumps over the lazy dog", paint) {
+        if let Ok(_res) = canvas.fill_text(
+            x,
+            cursor_y,
+            "The quick brown fox jumps over the lazy dog",
+            paint.clone(),
+        ) {
             cursor_y += font_metrics.height();
         }
     }
@@ -325,18 +332,18 @@ fn draw_stroked<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, x: f32, y: f
     paint.set_font(&[fonts.bold]);
     paint.set_line_width(12.0);
     paint.set_font_size(72.0);
-    let _ = canvas.stroke_text(x + 5.0, y + 5.0, "RUST", paint);
+    let _ = canvas.stroke_text(x + 5.0, y + 5.0, "RUST", paint.clone());
 
     paint.set_color(Color::black());
     paint.set_line_width(10.0);
-    let _ = canvas.stroke_text(x, y, "RUST", paint);
+    let _ = canvas.stroke_text(x, y, "RUST", paint.clone());
 
     paint.set_line_width(6.0);
     paint.set_color(Color::hex("#B7410E"));
-    let _ = canvas.stroke_text(x, y, "RUST", paint);
+    let _ = canvas.stroke_text(x, y, "RUST", paint.clone());
 
     paint.set_color(Color::white());
-    let _ = canvas.fill_text(x, y, "RUST", paint);
+    let _ = canvas.fill_text(x, y, "RUST", paint.clone());
 }
 
 fn draw_gradient_fill<T: Renderer>(canvas: &mut Canvas<T>, fonts: &Fonts, x: f32, y: f32) {

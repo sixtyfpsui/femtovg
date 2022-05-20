@@ -544,7 +544,7 @@ impl Game {
         paint.set_font_size(80.0);
 
         paint.set_line_width(4.0);
-        let _ = canvas.stroke_text(canvas.width() / 2.0, canvas.height() / 2.0, "rsBREAKOUT", paint);
+        let _ = canvas.stroke_text(canvas.width() / 2.0, canvas.height() / 2.0, "rsBREAKOUT", paint.clone());
 
         paint.set_color(Color::rgb(143, 80, 49));
         let _ = canvas.fill_text(canvas.width() / 2.0, canvas.height() / 2.0, "rsBREAKOUT", paint);
@@ -593,7 +593,7 @@ impl Game {
             0.0,
         );
         canvas.fill_path(&mut path, Paint::color(Color::rgb(119, 123, 126)));
-        canvas.stroke_path(&mut path, highlight);
+        canvas.stroke_path(&mut path, highlight.clone());
 
         let mut path = Path::new();
         path.rect(
@@ -603,7 +603,7 @@ impl Game {
             self.paddle_rect.size.height,
         );
         canvas.fill_path(&mut path, Paint::color(Color::rgb(119, 123, 126)));
-        canvas.stroke_path(&mut path, highlight);
+        canvas.stroke_path(&mut path, highlight.clone());
 
         let mut path = Path::new();
         path.rounded_rect_varying(
@@ -710,7 +710,12 @@ impl Game {
         let offset = 30.0;
 
         paint.set_line_width(4.0);
-        let _ = canvas.stroke_text(canvas.width() / 2.0, (canvas.height() / 2.0) + offset, heading, paint);
+        let _ = canvas.stroke_text(
+            canvas.width() / 2.0,
+            (canvas.height() / 2.0) + offset,
+            heading,
+            paint.clone(),
+        );
 
         paint.set_color(Color::rgb(143, 80, 49));
         let _ = canvas.fill_text(canvas.width() / 2.0, (canvas.height() / 2.0) + offset, heading, paint);
