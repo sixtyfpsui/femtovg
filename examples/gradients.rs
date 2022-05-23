@@ -367,7 +367,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -384,7 +384,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -401,7 +401,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -419,7 +419,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -436,7 +436,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -453,7 +453,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -471,7 +471,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -488,7 +488,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -505,7 +505,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -524,7 +524,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             0.0,
             50.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -541,7 +541,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -558,7 +558,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             25.0,
             75.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 255)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 255)),
@@ -576,7 +576,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             0.0,
             50.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -593,7 +593,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -610,7 +610,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             25.0,
             75.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 128)),
                 (0.5, Color::rgba(0, 255, 0, 128)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -628,7 +628,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             0.0,
             50.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -645,7 +645,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             0.0,
             100.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -662,7 +662,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             50.0,
             25.0,
             75.0,
-            &[
+            [
                 (0.0, Color::rgba(255, 0, 0, 0)),
                 (0.5, Color::rgba(0, 255, 0, 255)),
                 (1.0, Color::rgba(0, 0, 255, 128)),
@@ -682,7 +682,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.5, Color::rgba(255, 0, 0, 255)), (1.0, Color::rgba(0, 0, 255, 255))],
+            [(0.5, Color::rgba(255, 0, 0, 255)), (1.0, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -695,7 +695,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.4, Color::rgba(255, 0, 0, 255)), (0.6, Color::rgba(0, 0, 255, 255))],
+            [(0.4, Color::rgba(255, 0, 0, 255)), (0.6, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -708,7 +708,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.0, Color::rgba(255, 0, 0, 255)), (0.5, Color::rgba(0, 0, 255, 255))],
+            [(0.0, Color::rgba(255, 0, 0, 255)), (0.5, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -721,7 +721,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.5, Color::rgba(255, 0, 0, 255)), (0.5, Color::rgba(0, 0, 255, 255))],
+            [(0.5, Color::rgba(255, 0, 0, 255)), (0.5, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -729,14 +729,14 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
         x,
         y,
         "ms one stop",
-        Paint::linear_gradient_stops(0.0, 0.0, 100.0, 0.0, &[(0.5, Color::rgba(255, 0, 0, 255))]),
+        Paint::linear_gradient_stops(0.0, 0.0, 100.0, 0.0, [(0.5, Color::rgba(255, 0, 0, 255))]),
     );
     x += 110.0;
     r(
         x,
         y,
         "ms zero stops",
-        Paint::linear_gradient_stops(0.0, 0.0, 100.0, 0.0, &[]),
+        Paint::linear_gradient_stops(0.0, 0.0, 100.0, 0.0, []),
     );
     x += 110.0;
     r(
@@ -748,7 +748,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.5, Color::rgba(255, 0, 0, 255)), (0.0, Color::rgba(0, 0, 255, 255))],
+            [(0.5, Color::rgba(255, 0, 0, 255)), (0.0, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -761,7 +761,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[(0.5, Color::rgba(255, 0, 0, 255)), (0.3, Color::rgba(0, 0, 255, 255))],
+            [(0.5, Color::rgba(255, 0, 0, 255)), (0.3, Color::rgba(0, 0, 255, 255))],
         ),
     );
     x += 110.0;
@@ -774,7 +774,7 @@ fn draw_gradients<T: Renderer>(canvas: &mut Canvas<T>) {
             0.0,
             100.0,
             0.0,
-            &[
+            [
                 (0.5, Color::rgba(255, 0, 0, 255)),
                 (0.6, Color::rgba(0, 255, 0, 255)),
                 (0.3, Color::rgba(0, 0, 255, 255)),
