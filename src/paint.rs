@@ -3,7 +3,6 @@
 
 use std::rc::Rc;
 
-use crate::geometry::Transform2D;
 use crate::{Align, Baseline, Color, FillRule, FontId, ImageId, LineCap, LineJoin};
 
 #[derive(Copy, Clone, Debug, PartialEq, Default)]
@@ -88,17 +87,6 @@ pub(crate) enum GradientColors {
     MultiStop { stops: MultiStopGradient },
 }
 impl GradientColors {
-    fn mul_alpha(&mut self, a: f32) {
-        match self {
-            GradientColors::TwoStop { start_color, end_color } => {
-                start_color.a *= a;
-                end_color.a *= a;
-            }
-            GradientColors::MultiStop { stops, .. } => {
-                stops.tint *= a;
-            }
-        }
-    }
     fn from_stops<Stops>(stops: Stops) -> GradientColors
     where
         Stops: IntoIterator<Item = (f32, Color)>,
@@ -247,7 +235,6 @@ impl Default for GlyphTexture {
 #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub struct Paint {
     pub(crate) flavor: PaintFlavor,
-    pub(crate) transform: Transform2D,
     #[cfg_attr(feature = "serialization", serde(skip))]
     pub(crate) glyph_texture: GlyphTexture,
     pub(crate) shape_anti_alias: bool,
@@ -270,7 +257,6 @@ impl Default for Paint {
     fn default() -> Self {
         Self {
             flavor: PaintFlavor::Color(Color::white()),
-            transform: Default::default(),
             glyph_texture: Default::default(),
             shape_anti_alias: true,
             stencil_strokes: true,
@@ -817,26 +803,6 @@ impl Paint {
     pub fn with_fill_rule(mut self, rule: FillRule) -> Self {
         self.set_fill_rule(rule);
         self
-    }
-
-    pub(crate) fn mul_alpha(&mut self, a: f32) {
-        match &mut self.flavor {
-            PaintFlavor::Color(color) => {
-                color.a *= a;
-            }
-            PaintFlavor::Image { tint, .. } => {
-                tint.a *= a;
-            }
-            PaintFlavor::LinearGradient { colors, .. } => {
-                colors.mul_alpha(a);
-            }
-            PaintFlavor::BoxGradient { colors, .. } => {
-                colors.mul_alpha(a);
-            }
-            PaintFlavor::RadialGradient { colors, .. } => {
-                colors.mul_alpha(a);
-            }
-        }
     }
 
     /// Returns true if this paint is an untransformed image paint without anti-aliasing at the edges in case of a fill

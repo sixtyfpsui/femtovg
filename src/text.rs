@@ -1042,9 +1042,9 @@ impl GlyphAtlas {
                     canvas.scale(scale, scale);
 
                     if mode == RenderMode::Stroke {
-                        canvas.stroke_path(path, mask_paint.clone());
+                        canvas.stroke_path(path, &mask_paint);
                     } else {
-                        canvas.fill_path(path, mask_paint.clone());
+                        canvas.fill_path(path, &mask_paint);
                     }
 
                     canvas.restore();
@@ -1219,9 +1219,9 @@ pub(crate) fn render_direct<T: Renderer>(
         match glyph_rendering {
             GlyphRendering::RenderAsPath(path) => {
                 if mode == RenderMode::Stroke {
-                    canvas.stroke_path(path, paint);
+                    canvas.stroke_path(path, &paint);
                 } else {
-                    canvas.fill_path(path, paint.clone());
+                    canvas.fill_path(path, &paint);
                 }
             }
             #[cfg(feature = "image-loading")]

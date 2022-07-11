@@ -31,9 +31,11 @@ impl Params {
         images: &ImageStore<T>,
         paint: &Paint,
         scissor: &Scissor,
+        transform: &Transform2D,
         stroke_width: f32,
         fringe_width: f32,
         stroke_thr: f32,
+        alpha: f32
     ) -> Self {
         let mut params = Params::default();
 
@@ -72,12 +74,13 @@ impl Params {
         let inv_transform;
 
         match &paint.flavor {
-            PaintFlavor::Color(color) => {
+            PaintFlavor::Color(mut color) => {
+                color.a *= alpha;
                 let color = color.premultiplied().to_array();
                 params.inner_col = color;
                 params.outer_col = color;
                 params.shader_type = ShaderType::FillColor;
-                inv_transform = paint.transform.inversed();
+                inv_transform = transform.inversed();
             }
             PaintFlavor::Image {
                 id,
@@ -96,20 +99,21 @@ impl Params {
                 params.extent[0] = *width;
                 params.extent[1] = *height;
 
-                let color = tint;
+                let mut color = *tint;
+                color.a *= alpha;
 
                 params.inner_col = color.premultiplied().to_array();
                 params.outer_col = color.premultiplied().to_array();
 
-                let mut transform = Transform2D::identity();
-                transform.rotate(*angle);
-                transform.translate(*cx, *cy);
-                transform.multiply(&paint.transform);
+                let mut img_transform = Transform2D::identity();
+                img_transform.rotate(*angle);
+                img_transform.translate(*cx, *cy);
+                img_transform.multiply(&transform);
 
                 if image_info.flags().contains(ImageFlags::FLIP_Y) {
                     let mut m1 = Transform2D::identity();
                     m1.translate(0.0, height * 0.5);
-                    m1.multiply(&transform);
+                    m1.multiply(&img_transform);
 
                     let mut m2 = Transform2D::identity();
                     m2.scale(1.0, -1.0);
@@ -121,7 +125,7 @@ impl Params {
 
                     inv_transform = m1.inversed();
                 } else {
-                    inv_transform = transform.inversed();
+                    inv_transform = img_transform.inversed();
                 }
 
                 params.shader_type = ShaderType::FillImage;
@@ -150,6 +154,8 @@ impl Params {
                 let mut dy = end_y - start_y;
                 let d = (dx * dx + dy * dy).sqrt();
 
+                //colors.mul_alpha(alpha);
+
                 if d > 0.0001 {
                     dx /= d;
                     dy /= d;
@@ -158,18 +164,20 @@ impl Params {
                     dy = 1.0;
                 }
 
-                let mut transform = Transform2D([dy, -dx, dx, dy, start_x - dx * large, start_y - dy * large]);
+                let mut gradient_transform = Transform2D([dy, -dx, dx, dy, start_x - dx * large, start_y - dy * large]);
 
-                transform.multiply(&paint.transform);
+                gradient_transform.multiply(&transform);
 
-                inv_transform = transform.inversed();
+                inv_transform = gradient_transform.inversed();
 
                 params.extent[0] = large;
                 params.extent[1] = large + d * 0.5;
                 params.feather = 1.0f32.max(d);
 
                 match colors {
-                    GradientColors::TwoStop { start_color, end_color } => {
+                    GradientColors::TwoStop { mut start_color, mut end_color } => {
+                        start_color.a *= alpha;
+                        end_color.a *= alpha;
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
                         params.shader_type = ShaderType::FillGradient;
@@ -188,16 +196,20 @@ impl Params {
                 feather,
                 colors,
             } => {
-                let mut transform = Transform2D::new_translation(x + width * 0.5, y + height * 0.5);
-                transform.multiply(&paint.transform);
-                inv_transform = transform.inversed();
+                let mut gradient_transform = Transform2D::new_translation(x + width * 0.5, y + height * 0.5);
+                gradient_transform.multiply(&transform);
+                inv_transform = gradient_transform.inversed();
+
+                //colors.mul_alpha(alpha);
 
                 params.extent[0] = width * 0.5;
                 params.extent[1] = height * 0.5;
                 params.radius = *radius;
                 params.feather = *feather;
                 match colors {
-                    GradientColors::TwoStop { start_color, end_color } => {
+                    GradientColors::TwoStop { mut start_color, mut end_color } => {
+                        start_color.a *= alpha;
+                        end_color.a *= alpha;
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
                         params.shader_type = ShaderType::FillGradient;
@@ -217,16 +229,20 @@ impl Params {
                 let r = (in_radius + out_radius) * 0.5;
                 let f = out_radius - in_radius;
 
-                let mut transform = Transform2D::new_translation(*cx, *cy);
-                transform.multiply(&paint.transform);
-                inv_transform = transform.inversed();
+                //colors.mul_alpha(alpha);
+
+                let mut gradient_transform = Transform2D::new_translation(*cx, *cy);
+                gradient_transform.multiply(&transform);
+                inv_transform = gradient_transform.inversed();
 
                 params.extent[0] = r;
                 params.extent[1] = r;
                 params.radius = r;
                 params.feather = 1.0f32.max(f);
                 match colors {
-                    GradientColors::TwoStop { start_color, end_color } => {
+                    GradientColors::TwoStop { mut start_color, mut end_color } => {
+                        start_color.a *= alpha;
+                        end_color.a *= alpha;
                         params.inner_col = start_color.premultiplied().to_array();
                         params.outer_col = end_color.premultiplied().to_array();
                         params.shader_type = ShaderType::FillGradient;

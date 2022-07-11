@@ -17,7 +17,7 @@ TODO:
 #[macro_use]
 extern crate serde;
 
-use std::cell::RefCell;
+use std::{cell::RefCell, borrow::Borrow};
 use std::ops::Range;
 use std::path::Path as FilePath;
 use std::rc::Rc;
@@ -828,7 +828,7 @@ where
     }
 
     /// Fills the provided Path with the specified Paint.
-    pub fn fill_path(&mut self, path: &mut Path, mut paint: Paint) {
+    pub fn fill_path(&mut self, path: &mut Path, paint: impl Borrow<Paint>) {
         let transform = self.state().transform;
 
         // The path cache saves a flattened and transformed version of the path.
@@ -846,11 +846,7 @@ where
             return;
         }
 
-        // Transform paint
-        paint.transform = transform;
-
-        // Apply global alpha
-        paint.mul_alpha(self.state().alpha);
+        let paint = paint.borrow();
 
         let scissor = self.state().scissor;
 
@@ -884,9 +880,11 @@ where
                 &self.images,
                 &paint,
                 &scissor,
+                &transform,
                 self.fringe_width,
                 self.fringe_width,
                 -1.0,
+                self.state().alpha
             );
 
             CommandType::ConvexFill { params }
@@ -901,9 +899,11 @@ where
                 &self.images,
                 &paint,
                 &scissor,
+                &transform,
                 self.fringe_width,
                 self.fringe_width,
                 -1.0,
+                self.state().alpha
             );
 
             CommandType::ConcaveFill {
@@ -988,7 +988,7 @@ where
     }
 
     /// Strokes the provided Path with the specified Paint.
-    pub fn stroke_path(&mut self, path: &mut Path, mut paint: Paint) {
+    pub fn stroke_path(&mut self, path: &mut Path, paint: impl Borrow<Paint>) {
         let transform = self.state().transform;
 
         // The path cache saves a flattened and transformed version of the path.
@@ -1005,33 +1005,35 @@ where
 
         let scissor = self.state().scissor;
 
-        // Transform paint
-        paint.transform = transform;
+        let paint = paint.borrow();
 
         // Scale stroke width by current transform scale.
         // Note: I don't know why the original author clamped the max stroke width to 200, but it didn't
         // look correct when zooming in. There was probably a good reson for doing so and I may have
         // introduced a bug by removing the upper bound.
         //paint.set_stroke_width((paint.stroke_width() * transform.average_scale()).max(0.0).min(200.0));
-        paint.line_width = (paint.line_width * transform.average_scale()).max(0.0);
+        let mut stroke_width = (paint.line_width * transform.average_scale()).max(0.0);
+
+        let mut alpha = self.state().alpha;
 
         if paint.line_width < self.fringe_width {
             // If the stroke width is less than pixel size, use alpha to emulate coverage.
             // Since coverage is area, scale by alpha*alpha.
-            let alpha = (paint.line_width / self.fringe_width).max(0.0).min(1.0);
+            let coverage_alpha = (paint.line_width / self.fringe_width).max(0.0).min(1.0);
 
-            paint.mul_alpha(alpha * alpha);
-            paint.line_width = self.fringe_width;
+            alpha *= coverage_alpha * coverage_alpha;
+
+            stroke_width = self.fringe_width;
         }
 
         // Apply global alpha
-        paint.mul_alpha(self.state().alpha);
+        //paint.mul_alpha(self.state().alpha);
 
         // Calculate stroke vertices.
         // expand_stroke will fill path_cache.contours[].stroke with vertex data for the GPU
         let fringe_with = if paint.anti_alias() { self.fringe_width } else { 0.0 };
         path_cache.expand_stroke(
-            paint.line_width * 0.5,
+            stroke_width * 0.5,
             fringe_with,
             paint.line_cap_start,
             paint.line_cap_end,
@@ -1045,9 +1047,11 @@ where
             &self.images,
             &paint,
             &scissor,
-            paint.line_width,
+            &transform,
+            stroke_width,
             self.fringe_width,
             -1.0,
+            alpha
         );
 
         let flavor = if paint.stencil_strokes() {
@@ -1055,9 +1059,11 @@ where
                 &self.images,
                 &paint,
                 &scissor,
-                paint.line_width,
+                &transform,
+                stroke_width,
                 self.fringe_width,
                 1.0 - 0.5 / 255.0,
+                alpha
             );
 
             CommandType::StencilStroke {
@@ -1101,10 +1107,10 @@ where
         self.append_cmd(cmd);
     }
 
-    fn render_unclipped_image_blit(&mut self, target_rect: &Rect, paint: Paint) {
+    fn render_unclipped_image_blit(&mut self, target_rect: &Rect, paint: &Paint) {
         let scissor = self.state().scissor;
 
-        let mut params = Params::new(&self.images, &paint, &scissor, 0., 0., -1.0);
+        let mut params = Params::new(&self.images, &paint, &scissor, &self.state().transform, 0., 0., -1.0, 1.);
         params.shader_type = ShaderType::TextureCopyUnclipped;
 
         let mut cmd = Command::new(CommandType::Triangles { params });
@@ -1325,9 +1331,6 @@ where
 
             let draw_commands = atlas.render_atlas(self, &layout, &paint, render_mode)?;
 
-            // Apply global alpha
-            paint.mul_alpha(self.state().alpha);
-
             for cmd in draw_commands.alpha_glyphs {
                 let verts = create_vertices(&cmd.quads);
 
@@ -1353,7 +1356,7 @@ where
     fn render_triangles(&mut self, verts: &[Vertex], paint: &Paint) {
         let scissor = self.state().scissor;
 
-        let params = Params::new(&self.images, paint, &scissor, 1.0, 1.0, -1.0);
+        let params = Params::new(&self.images, paint, &scissor, &Transform2D::default(), 1.0, 1.0, -1.0, self.state().alpha);
 
         let mut cmd = Command::new(CommandType::Triangles { params });
         cmd.composite_operation = self.state().composite_operation;
