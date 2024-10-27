@@ -8,7 +8,7 @@ use femtovg::{
 use std::collections::HashMap;
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
     window::Window,
 };
 
@@ -234,11 +234,10 @@ fn run(
     let mut buffer = Buffer::new(&FONT_SYSTEM, Metrics::new(20, 25));
     let mut cache = RenderCache::default();
     buffer.set_text(LOREM_TEXT, Attrs::new());
-    el.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-
+    el.run(move |event, event_loop_window_target| {
+        event_loop_window_target.set_control_flow(winit::event_loop::ControlFlow::Poll);
         match event {
-            Event::LoopDestroyed => *control_flow = ControlFlow::Exit,
+            Event::LoopExiting => event_loop_window_target.exit(),
             Event::WindowEvent { ref event, .. } => match event {
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::Resized(physical_size) => {
@@ -248,30 +247,32 @@ fn run(
                         physical_size.height.try_into().unwrap(),
                     );
                 }
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::CloseRequested => event_loop_window_target.exit(),
+                WindowEvent::RedrawRequested { .. } => {
+                    let dpi_factor = window.scale_factor();
+                    let size = window.inner_size();
+                    canvas.set_size(size.width, size.height, 1.0);
+                    canvas.clear_rect(0, 0, size.width, size.height, Color::rgbf(0.9, 0.9, 0.9));
+
+                    buffer.set_metrics(Metrics::new((20.0 * dpi_factor) as i32, (25.0 * dpi_factor) as i32));
+                    buffer.set_size(size.width as i32, size.height as i32);
+                    let cmds = cache
+                        .fill_to_cmds(&FONT_SYSTEM, &mut canvas, &buffer, (0.0, 0.0))
+                        .unwrap();
+                    canvas.draw_glyph_commands(cmds, &Paint::color(Color::black()), 1.0);
+
+                    canvas.flush();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    surface.swap_buffers(&context).unwrap();
+                }
                 _ => (),
             },
-            Event::MainEventsCleared => window.request_redraw(),
-            Event::RedrawRequested(_) => {
-                let dpi_factor = window.scale_factor();
-                let size = window.inner_size();
-                canvas.set_size(size.width, size.height, 1.0);
-                canvas.clear_rect(0, 0, size.width, size.height, Color::rgbf(0.9, 0.9, 0.9));
+            Event::AboutToWait => window.request_redraw(),
 
-                buffer.set_metrics(Metrics::new((20.0 * dpi_factor) as i32, (25.0 * dpi_factor) as i32));
-                buffer.set_size(size.width as i32, size.height as i32);
-                let cmds = cache
-                    .fill_to_cmds(&FONT_SYSTEM, &mut canvas, &buffer, (0.0, 0.0))
-                    .unwrap();
-                canvas.draw_glyph_commands(cmds, &Paint::color(Color::black()), 1.0);
-
-                canvas.flush();
-                #[cfg(not(target_arch = "wasm32"))]
-                surface.swap_buffers(&context).unwrap();
-            }
             _ => (),
         }
-    });
+    })
+    .unwrap();
 }
 
 const LOREM_TEXT: &str = r"

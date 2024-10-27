@@ -32,7 +32,7 @@ pub fn start(
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
 
     #[cfg(not(target_arch = "wasm32"))]
     let (canvas, window, context, surface) = {
