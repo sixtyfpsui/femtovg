@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use femtovg::renderer::OpenGl;
-use femtovg::{Canvas, Color, Renderer};
+use femtovg::{Canvas, Color};
 use glutin::surface::Surface;
 use glutin::{context::PossiblyCurrentContext, display::Display};
 use glutin_winit::DisplayBuilder;
@@ -88,11 +88,11 @@ fn create_window(event_loop: &EventLoop<()>) -> (PossiblyCurrentContext, Display
     )
 }
 
-fn render<T: Renderer>(
+fn render(
     context: &PossiblyCurrentContext,
     surface: &Surface<WindowSurface>,
     window: &Window,
-    canvas: &mut Canvas<T>,
+    canvas: &mut Canvas<OpenGl>,
     square_position: PhysicalPosition<f64>,
 ) {
     // Make sure the canvas has the right size:
@@ -111,7 +111,7 @@ fn render<T: Renderer>(
     );
 
     // Tell renderer to execute all drawing commands
-    canvas.flush();
+    canvas.flush_to_surface(&());
     // Display what we've just rendered
     surface.swap_buffers(context).expect("Could not swap buffers");
 }

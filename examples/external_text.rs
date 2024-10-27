@@ -2,18 +2,17 @@ mod helpers;
 
 use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, SubpixelBin};
 use femtovg::{
-    renderer::OpenGl, Atlas, Canvas, Color, DrawCommand, ErrorKind, GlyphDrawCommands, ImageFlags, ImageId,
-    ImageSource, Paint, Quad, Renderer,
+    Atlas, Canvas, Color, DrawCommand, ErrorKind, GlyphDrawCommands, ImageFlags, ImageId, ImageSource, Paint, Quad,
+    Renderer,
 };
-use std::collections::HashMap;
+use helpers::WindowSurface;
+use std::{collections::HashMap, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::Window,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
-use glutin::prelude::*;
 use imgref::{Img, ImgRef};
 use rgb::RGBA8;
 use swash::scale::image::Content;
@@ -224,13 +223,7 @@ lazy_static::lazy_static! {
     static ref FONT_SYSTEM: FontSystem = FontSystem::new();
 }
 
-fn run(
-    mut canvas: Canvas<OpenGl>,
-    el: EventLoop<()>,
-    #[cfg(not(target_arch = "wasm32"))] context: glutin::context::PossiblyCurrentContext,
-    #[cfg(not(target_arch = "wasm32"))] surface: glutin::surface::Surface<glutin::surface::WindowSurface>,
-    window: Window,
-) {
+fn run<W: WindowSurface>(mut canvas: Canvas<W::Renderer>, el: EventLoop<()>, mut surface: W, window: Arc<Window>) {
     let mut buffer = Buffer::new(&FONT_SYSTEM, Metrics::new(20, 25));
     let mut cache = RenderCache::default();
     buffer.set_text(LOREM_TEXT, Attrs::new());
@@ -241,11 +234,7 @@ fn run(
             Event::WindowEvent { ref event, .. } => match event {
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::Resized(physical_size) => {
-                    surface.resize(
-                        &context,
-                        physical_size.width.try_into().unwrap(),
-                        physical_size.height.try_into().unwrap(),
-                    );
+                    surface.resize(physical_size.width, physical_size.height);
                 }
                 WindowEvent::CloseRequested => event_loop_window_target.exit(),
                 WindowEvent::RedrawRequested { .. } => {
@@ -261,9 +250,7 @@ fn run(
                         .unwrap();
                     canvas.draw_glyph_commands(cmds, &Paint::color(Color::black()), 1.0);
 
-                    canvas.flush();
-                    #[cfg(not(target_arch = "wasm32"))]
-                    surface.swap_buffers(&context).unwrap();
+                    surface.present(&mut canvas);
                 }
                 _ => (),
             },
