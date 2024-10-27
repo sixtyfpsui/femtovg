@@ -1,8 +1,8 @@
 use std::f32::consts::PI;
 
 use femtovg::{
-    renderer::OpenGl, Align, Baseline, Canvas, Color, FillRule, FontId, ImageFlags, ImageId, LineCap, LineJoin, Paint,
-    Path, Renderer, Solidity,
+    Align, Baseline, Canvas, Color, FillRule, FontId, ImageFlags, ImageId, LineCap, LineJoin, Paint, Path, Renderer,
+    Solidity,
 };
 use instant::Instant;
 use resource::resource;
@@ -36,8 +36,8 @@ struct Fonts {
     icons: FontId,
 }
 
-fn run(
-    mut canvas: Canvas<OpenGl>,
+fn run<R: Renderer + 'static>(
+    mut canvas: Canvas<R>,
     el: EventLoop<()>,
     #[cfg(not(target_arch = "wasm32"))] context: glutin::context::PossiblyCurrentContext,
     #[cfg(not(target_arch = "wasm32"))] surface: glutin::surface::Surface<glutin::surface::WindowSurface>,
