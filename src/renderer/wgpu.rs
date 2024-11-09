@@ -32,6 +32,209 @@ struct Vertex {
 use super::Params;
 use super::Vertex;
 
+#[derive(Clone, Default, PartialEq)]
+struct Mat3x4<T>([[T; 4]; 3]);
+
+impl<T> AsRef<[[T; 4]; 3]> for Mat3x4<T> {
+    fn as_ref(&self) -> &[[T; 4]; 3] {
+        &self.0
+    }
+}
+
+impl<T> AsMut<[[T; 4]; 3]> for Mat3x4<T> {
+    fn as_mut(&mut self) -> &mut [[T; 4]; 3] {
+        &mut self.0
+    }
+}
+
+impl<T: Copy> From<[T; 12]> for Mat3x4<T> {
+    fn from(mat: [T; 12]) -> Self {
+        Self([
+            [mat[0], mat[3], mat[6], mat[9]],
+            [mat[1], mat[4], mat[7], mat[10]],
+            [mat[2], mat[5], mat[8], mat[11]],
+        ])
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct Vec4<T>([T; 4]);
+
+impl<T> AsRef<[T; 4]> for Vec4<T> {
+    fn as_ref(&self) -> &[T; 4] {
+        &self.0
+    }
+}
+
+impl<T> AsMut<[T; 4]> for Vec4<T> {
+    fn as_mut(&mut self) -> &mut [T; 4] {
+        &mut self.0
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct Vec2<T>([T; 2]);
+
+impl<T> AsRef<[T; 2]> for Vec2<T> {
+    fn as_ref(&self) -> &[T; 2] {
+        &self.0
+    }
+}
+
+impl<T> AsMut<[T; 2]> for Vec2<T> {
+    fn as_mut(&mut self) -> &mut [T; 2] {
+        &mut self.0
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct Vec3<T>([T; 3]);
+
+impl<T> AsRef<[T; 3]> for Vec3<T> {
+    fn as_ref(&self) -> &[T; 3] {
+        &self.0
+    }
+}
+
+impl<T> AsMut<[T; 3]> for Vec3<T> {
+    fn as_mut(&mut self) -> &mut [T; 3] {
+        &mut self.0
+    }
+}
+
+encase::impl_matrix!(3, 4, Mat3x4<T>; using AsRef AsMut From);
+encase::impl_vector!(4, Vec4<T>; using AsRef AsMut From);
+encase::impl_vector!(2, Vec2<T>; using AsRef AsMut From);
+encase::impl_vector!(3, Vec3<T>; using AsRef AsMut From);
+
+#[derive(encase::ShaderType, Clone, Default, PartialEq)]
+struct UniformParams {
+    scissor_mat: Mat3x4<f32>,
+    paint_mat: Mat3x4<f32>,
+    inner_col: Vec4<f32>,
+    outer_col: Vec4<f32>,
+    scissor_ext: Vec2<f32>,
+    scissor_scale: Vec2<f32>,
+    extent: Vec2<f32>,
+    radius: f32,
+    feather: f32,
+    stroke_mult: f32,
+    stroke_thr: f32,
+    tex_type: f32,
+    _unused_shader_type: f32,
+    glyph_texture_type: f32, // 0 -> no glyph rendering, 1 -> alpha mask, 2 -> color texture
+    image_blur_filter_sigma: f32,
+    image_blur_filter_direction: Vec2<f32>,
+    image_blur_filter_coeff: Vec3<f32>,
+}
+
+impl UniformParams {
+    pub fn set_scissor_mat(&mut self, mat: [f32; 12]) {
+        //use encase::matrix::AsMutMatrixParts;
+        //self.scissor_mat = mat;
+        // self.scissor_mat.as_mut().iter_mut().rev().flatten().zip(mat.iter()).for_each(|(a, b)| *a = *b);
+        self.scissor_mat = mat.into();
+    }
+
+    pub fn set_paint_mat(&mut self, mat: [f32; 12]) {
+        self.paint_mat = mat.into();
+        //self.paint_mat.as_mut().iter_mut().flatten().zip(mat.iter()).for_each(|(a, b)| *a = *b);
+    }
+
+    pub fn set_inner_col(&mut self, col: [f32; 4]) {
+        self.inner_col.0 = col;
+        //self.inner_col.as_mut().copy_from_slice(&col);
+    }
+
+    pub fn set_outer_col(&mut self, col: [f32; 4]) {
+        self.outer_col.0 = col;
+        //self.outer_col.as_mut().copy_from_slice(&col);
+    }
+
+    pub fn set_scissor_ext(&mut self, ext: [f32; 2]) {
+        self.scissor_ext.0 = ext;
+        //self.scissor_ext.as_mut().copy_from_slice(&ext);
+    }
+
+    pub fn set_scissor_scale(&mut self, scale: [f32; 2]) {
+        self.scissor_scale.0 = scale;
+        //self.scissor_scale.as_mut().copy_from_slice(&scale);
+    }
+
+    pub fn set_extent(&mut self, ext: [f32; 2]) {
+        self.extent.0 = ext;
+        //self.extent.as_mut().copy_from_slice(&ext);
+    }
+
+    pub fn set_radius(&mut self, radius: f32) {
+        self.radius = radius;
+    }
+
+    pub fn set_feather(&mut self, feather: f32) {
+        self.feather = feather;
+    }
+
+    pub fn set_stroke_mult(&mut self, stroke_mult: f32) {
+        self.stroke_mult = stroke_mult;
+    }
+
+    pub fn set_stroke_thr(&mut self, stroke_thr: f32) {
+        self.stroke_thr = stroke_thr;
+    }
+
+    pub fn set_tex_type(&mut self, tex_type: f32) {
+        self.tex_type = tex_type;
+    }
+
+    pub fn set_shader_type(&mut self, shader_type: f32) {
+        self._unused_shader_type = shader_type;
+    }
+
+    pub fn set_glyph_texture_type(&mut self, glyph_texture_type: f32) {
+        self.glyph_texture_type = glyph_texture_type;
+    }
+
+    pub fn set_image_blur_filter_direction(&mut self, direction: [f32; 2]) {
+        self.image_blur_filter_direction.0 = direction;
+        //self.image_blur_filter_direction.as_mut().copy_from_slice(&direction);
+    }
+
+    pub fn set_image_blur_filter_sigma(&mut self, sigma: f32) {
+        self.image_blur_filter_sigma = sigma;
+    }
+
+    pub fn set_image_blur_filter_coeff(&mut self, coeff: [f32; 3]) {
+        self.image_blur_filter_coeff.0 = coeff;
+        //self.image_blur_filter_coeff.as_mut().copy_from_slice(&coeff);
+    }
+}
+
+impl From<&Params> for UniformParams {
+    fn from(params: &Params) -> Self {
+        let mut arr = Self::default();
+
+        arr.set_scissor_mat(params.scissor_mat);
+        arr.set_paint_mat(params.paint_mat);
+        arr.set_inner_col(params.inner_col);
+        arr.set_outer_col(params.outer_col);
+        arr.set_scissor_ext(params.scissor_ext);
+        arr.set_scissor_scale(params.scissor_scale);
+        arr.set_extent(params.extent);
+        arr.set_radius(params.radius);
+        arr.set_feather(params.feather);
+        arr.set_stroke_mult(params.stroke_mult);
+        arr.set_stroke_thr(params.stroke_thr);
+        arr.set_shader_type(params.shader_type.to_f32());
+        arr.set_tex_type(params.tex_type);
+        arr.set_glyph_texture_type(params.glyph_texture_type as f32);
+        arr.set_image_blur_filter_direction(params.image_blur_filter_direction);
+        arr.set_image_blur_filter_sigma(params.image_blur_filter_sigma);
+        arr.set_image_blur_filter_coeff(params.image_blur_filter_coeff);
+
+        arr
+    }
+}
+
 const UNIFORMARRAY_SIZE: usize = 14;
 
 #[derive(Clone, PartialEq)]
@@ -1145,7 +1348,7 @@ enum ImageOrTexture {
 struct BindGroupState {
     image: Option<ImageOrTexture>,
     glyph_texture: GlyphTexture,
-    uniforms: UniformArray,
+    uniforms: UniformParams,
 }
 
 impl BindGroupState {
@@ -1156,11 +1359,25 @@ impl BindGroupState {
         bind_group_layout: &wgpu::BindGroupLayout,
         empty_texture: &Rc<wgpu::Texture>,
     ) -> wgpu::BindGroup {
+        /*
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Fragment Uniform Buffer"),
             contents: bytemuck::cast_slice(self.uniforms.as_slice()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        */
+
+        let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Fragment Uniform Buffer"),
+            size: encase::ShaderType::size(&self.uniforms).get(),
+            usage: wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: true,
+        });
+        let mut buffer = uniform_buf.slice(..).get_mapped_range_mut();
+        encase::UniformBuffer::new(buffer.as_mut())
+            .write(&self.uniforms)
+            .unwrap();
+        drop(buffer);
 
         let (main_texture_view, main_sampler) =
             RenderPassBuilder::create_texture_view_and_sampler(device, images, self.image.as_ref(), empty_texture);
@@ -1485,7 +1702,7 @@ impl CommandToPipelineAndBindGroupMapper {
         let bind_group_state = BindGroupState {
             image,
             glyph_texture,
-            uniforms: UniformArray::from(params),
+            uniforms: UniformParams::from(params),
         };
 
         if self.current_bind_group_state != Some(bind_group_state.clone()) {
