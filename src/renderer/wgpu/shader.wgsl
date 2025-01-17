@@ -43,7 +43,11 @@ var<uniform> viewSize: ViewSize;
 
 @group(1)
 @binding(0)
-var<uniform> params: Params;
+var<uniform> params_index: i32;
+
+@group(2)
+@binding(0)
+var<storage, read> all_params: array<Params>;
 
 struct Vertex {
     vertex: vec2<f32>,
@@ -90,6 +94,8 @@ var glyph_sampler: sampler;
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var result: vec4<f32>;
+
+    var params: Params = all_params[params_index];
 
     var strokeAlpha: f32 = 1.0;
     if (shader_type != SHADER_TYPE_TextureCopyUnclipped && shader_type != SHADER_TYPE_FillColorUnclipped && shader_type != SHADER_TYPE_FilterImage) {

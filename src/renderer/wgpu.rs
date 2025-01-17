@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::rc::Rc;
 
 use rgb::bytemuck;
@@ -23,17 +24,15 @@ pub use wgpu;
 use super::Params;
 use super::Vertex;
 
-const UNIFORMARRAY_SIZE: usize = 14;
-
 #[derive(Clone, PartialEq)]
-pub struct UniformArray([f32; UNIFORMARRAY_SIZE * 4]);
+pub struct UniformArray([f32; 52]);
 
 impl Default for UniformArray {
     fn default() -> Self {
         Self([
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ])
     }
 }
@@ -163,6 +162,7 @@ pub struct WGPURenderer {
 
     bind_group_layout: Rc<wgpu::BindGroupLayout>,
     viewport_bind_group_layout: Rc<wgpu::BindGroupLayout>,
+    params_bind_group_layout: Rc<wgpu::BindGroupLayout>,
     pipeline_layout: Rc<wgpu::PipelineLayout>,
     pipeline_cache: Rc<RefCell<HashMap<PipelineState, CachedPipeline>>>,
 }
@@ -207,6 +207,20 @@ impl WGPURenderer {
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        }));
+
+        let params_bind_group_layout = Rc::new(device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Bind Group Layout for params storage"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -264,7 +278,11 @@ impl WGPURenderer {
 
         let pipeline_layout = Rc::new(device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&viewport_bind_group_layout, &bind_group_layout],
+            bind_group_layouts: &[
+                &viewport_bind_group_layout,
+                &bind_group_layout,
+                &params_bind_group_layout,
+            ],
             push_constant_ranges: &[],
         }));
 
@@ -281,6 +299,7 @@ impl WGPURenderer {
             stencil_buffer_for_textures: HashMap::new(),
             bind_group_layout,
             viewport_bind_group_layout,
+            params_bind_group_layout,
             pipeline_layout,
             pipeline_cache: Default::default(),
         }
@@ -343,16 +362,28 @@ impl Renderer for WGPURenderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
+        let (uniforms, uniform_indices) = {
+            let mut uniform_collector = UniformCollector {
+                images,
+                uniforms: Vec::new(),
+                uniform_indices: Vec::new(),
+            };
+            uniform_collector.collect(&commands);
+            (uniform_collector.uniforms, uniform_collector.uniform_indices)
+        };
+
         let mut render_pass_builder = RenderPassBuilder::new(
             self.device.clone(),
             &mut encoder,
             surface_texture.format(),
             self.screen_view,
             self.viewport_bind_group_layout.clone(),
+            self.params_bind_group_layout.clone(),
             &mut self.stencil_buffer_for_textures,
             texture_view,
             stencil_buffer.clone(),
             vertex_buffer,
+            &uniforms,
         );
         // Ensure that we have one initial render pass, in case the first command is not SetRenderTarget
         render_pass_builder.set_render_target_screen();
@@ -364,11 +395,12 @@ impl Renderer for WGPURenderer {
             self.bind_group_layout.clone(),
             self.pipeline_layout.clone(),
             self.pipeline_cache.clone(),
+            uniforms,
         );
 
         let mut current_render_target = RenderTarget::Screen;
 
-        for command in commands {
+        for (command, params) in commands.iter().zip(uniform_indices.iter()) {
             match command.cmd_type {
                 super::CommandType::SetRenderTarget(render_target) => {
                     current_render_target = render_target;
@@ -381,73 +413,68 @@ impl Renderer for WGPURenderer {
                         }
                     }
                 }
-                super::CommandType::ClearRect { color } => {
+                super::CommandType::ClearRect { .. } => {
                     clear_rect(
+                        params,
                         images,
-                        color,
                         &command,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
                     );
                 }
-                super::CommandType::ConvexFill { ref params } => {
+                super::CommandType::ConvexFill { .. } => {
                     convex_fill(
                         &command,
+                        params,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
-                        params,
                         images,
                     );
                 }
-                super::CommandType::ConcaveFill {
-                    ref stencil_params,
-                    ref fill_params,
-                } => {
+                super::CommandType::ConcaveFill { .. } => {
                     concave_fill(
                         &command,
+                        params,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
-                        stencil_params,
                         images,
-                        fill_params,
                     );
                 }
-                super::CommandType::Stroke { params } => {
+                super::CommandType::Stroke { .. } => {
                     stroke(
                         &command,
+                        params,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
-                        params,
                         images,
                     );
                 }
-                super::CommandType::StencilStroke { params1, params2 } => {
+                super::CommandType::StencilStroke { .. } => {
                     stencil_stroke(
                         &command,
+                        params,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
-                        params2,
                         images,
-                        params1,
                     );
                 }
-                super::CommandType::Triangles { ref params } => {
+                super::CommandType::Triangles { .. } => {
                     triangles(
                         &command,
+                        params,
                         &mut pipeline_and_bindgroup_mapper,
                         &mut render_pass_builder,
-                        params,
                         images,
                     );
                 }
                 super::CommandType::RenderFilteredImage { target_image, filter } => match filter {
-                    crate::ImageFilter::GaussianBlur { sigma } => {
+                    crate::ImageFilter::GaussianBlur { .. } => {
                         gaussian_blur_filter(
                             &self.device,
                             &mut current_render_target,
+                            params,
                             images,
                             command,
-                            sigma,
                             &mut render_pass_builder,
                             &mut pipeline_and_bindgroup_mapper,
                             target_image,
@@ -591,12 +618,112 @@ impl Renderer for WGPURenderer {
     }
 }
 
+struct UniformCollector<'a> {
+    images: &'a mut ImageStore<Image>,
+    uniforms: Vec<Params>,
+    uniform_indices: Vec<Range<usize>>,
+}
+
+impl<'a> UniformCollector<'a> {
+    fn collect(&mut self, commands: &[super::Command]) {
+        for command in commands {
+            let start = self.uniforms.len();
+            match &command.cmd_type {
+                super::CommandType::SetRenderTarget(_) => {
+                    // no uniforms needed
+                }
+                super::CommandType::ClearRect { color } => {
+                    let mut params = Params::new(
+                        self.images,
+                        &Default::default(),
+                        &crate::paint::PaintFlavor::Color(*color),
+                        &Default::default(),
+                        &Scissor::default(),
+                        0.,
+                        0.,
+                        0.,
+                    );
+                    params.shader_type = ShaderType::FillColorUnclipped;
+                    self.uniforms.push(params);
+                }
+                super::CommandType::ConvexFill { params } => self.uniforms.push(params.clone()),
+                super::CommandType::ConcaveFill {
+                    stencil_params,
+                    fill_params,
+                } => {
+                    self.uniforms.push(stencil_params.clone());
+                    self.uniforms.push(fill_params.clone());
+                }
+                super::CommandType::Stroke { params } => {
+                    self.uniforms.push(params.clone());
+                }
+                super::CommandType::StencilStroke { params1, params2 } => {
+                    self.uniforms.push(params1.clone());
+                    self.uniforms.push(params2.clone());
+                }
+                super::CommandType::Triangles { params } => {
+                    self.uniforms.push(params.clone());
+                }
+                super::CommandType::RenderFilteredImage {
+                    filter: crate::ImageFilter::GaussianBlur { sigma },
+                    ..
+                } => {
+                    let source_image = self.images.get(command.image.unwrap()).unwrap();
+
+                    let image_paint = crate::Paint::image(
+                        command.image.unwrap(),
+                        0.,
+                        0.,
+                        source_image.texture.width() as _,
+                        source_image.texture.height() as _,
+                        0.,
+                        1.,
+                    );
+
+                    let mut blur_params = Params::new(
+                        self.images,
+                        &Default::default(),
+                        &image_paint.flavor,
+                        &Default::default(),
+                        &Scissor::default(),
+                        0.,
+                        0.,
+                        0.,
+                    );
+                    blur_params.shader_type = ShaderType::FilterImage;
+
+                    let gauss_coeff_x = 1. / ((2. * std::f32::consts::PI).sqrt() * sigma);
+                    let gauss_coeff_y = f32::exp(-0.5 / (sigma * sigma));
+                    let gauss_coeff_z = gauss_coeff_y * gauss_coeff_y;
+
+                    blur_params.image_blur_filter_coeff[0] = gauss_coeff_x;
+                    blur_params.image_blur_filter_coeff[1] = gauss_coeff_y;
+                    blur_params.image_blur_filter_coeff[2] = gauss_coeff_z;
+
+                    blur_params.image_blur_filter_direction = [1.0, 0.0];
+                    // GLES 2.0 does not allow non-constant loop indices, so limit the standard devitation to allow for a upper fixed limit
+                    // on the number of iterations in the fragment shader.
+                    blur_params.image_blur_filter_sigma = sigma.min(8.);
+
+                    self.uniforms.push(blur_params);
+
+                    blur_params.image_blur_filter_direction = [0.0, 1.0];
+
+                    self.uniforms.push(blur_params);
+                }
+            }
+            let end = self.uniforms.len();
+            self.uniform_indices.push(Range { start, end });
+        }
+    }
+}
+
 fn gaussian_blur_filter(
     device: &wgpu::Device,
     current_render_target: &mut RenderTarget,
+    params: &Range<usize>,
     images: &mut ImageStore<Image>,
-    command: super::Command,
-    sigma: f32,
+    command: &super::Command,
     render_pass_builder: &mut RenderPassBuilder<'_>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     target_image: ImageId,
@@ -607,40 +734,7 @@ fn gaussian_blur_filter(
 
     let source_image = images.get(command.image.unwrap()).unwrap();
 
-    let image_paint = crate::Paint::image(
-        command.image.unwrap(),
-        0.,
-        0.,
-        source_image.texture.width() as _,
-        source_image.texture.height() as _,
-        0.,
-        1.,
-    );
-
-    let mut blur_params = Params::new(
-        images,
-        &Default::default(),
-        &image_paint.flavor,
-        &Default::default(),
-        &Scissor::default(),
-        0.,
-        0.,
-        0.,
-    );
-    blur_params.shader_type = ShaderType::FilterImage;
-
-    let gauss_coeff_x = 1. / ((2. * std::f32::consts::PI).sqrt() * sigma);
-    let gauss_coeff_y = f32::exp(-0.5 / (sigma * sigma));
-    let gauss_coeff_z = gauss_coeff_y * gauss_coeff_y;
-
-    blur_params.image_blur_filter_coeff[0] = gauss_coeff_x;
-    blur_params.image_blur_filter_coeff[1] = gauss_coeff_y;
-    blur_params.image_blur_filter_coeff[2] = gauss_coeff_z;
-
-    blur_params.image_blur_filter_direction = [1.0, 0.0];
-    // GLES 2.0 does not allow non-constant loop indices, so limit the standard devitation to allow for a upper fixed limit
-    // on the number of iterations in the fragment shader.
-    blur_params.image_blur_filter_sigma = sigma.min(8.);
+    let blur_params = params.start;
 
     let horizontal_blur_buffer = Rc::new(device.create_texture(&wgpu::TextureDescriptor {
         label: Some("blur horizontal"),
@@ -670,7 +764,7 @@ fn gaussian_blur_filter(
             wgpu::PrimitiveTopology::TriangleList,
             StencilTest::Disabled,
             Some(wgpu::Face::Back),
-            &blur_params,
+            blur_params,
             images,
             command.image.map(ImageOrTexture::Image),
             command.glyph_texture,
@@ -680,7 +774,7 @@ fn gaussian_blur_filter(
 
     render_pass_builder.set_render_target_image(images, target_image, wgpu::LoadOp::Clear(wgpu::Color::default()));
 
-    blur_params.image_blur_filter_direction = [0.0, 1.0];
+    let blur_params = params.start;
 
     if let Some((start, count)) = command.triangles_verts {
         pipeline_and_bindgroup_mapper.update_renderpass(
@@ -689,7 +783,7 @@ fn gaussian_blur_filter(
             wgpu::PrimitiveTopology::TriangleList,
             StencilTest::Disabled,
             Some(wgpu::Face::Back),
-            &blur_params,
+            blur_params,
             images,
             Some(ImageOrTexture::Texture(horizontal_blur_buffer)),
             command.glyph_texture,
@@ -710,14 +804,15 @@ fn gaussian_blur_filter(
 
 fn triangles(
     command: &super::Command,
+    params: &Range<usize>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
-    params: &Params,
     images: &mut ImageStore<Image>,
 ) {
     let Some((start, count)) = command.triangles_verts else {
         return;
     };
+    let params = params.start;
     pipeline_and_bindgroup_mapper.update_renderpass(
         render_pass_builder,
         blend_state(command).into(),
@@ -734,12 +829,13 @@ fn triangles(
 
 fn stencil_stroke(
     command: &super::Command,
+    params: &Range<usize>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
-    params2: Params,
     images: &mut ImageStore<Image>,
-    params1: Params,
 ) {
+    let params1 = params.start;
+    let params2 = params.start + 1;
     if !command
         .drawables
         .iter()
@@ -776,7 +872,7 @@ fn stencil_stroke(
             stencil_reference: 0,
         },
         Some(wgpu::Face::Back),
-        &params2,
+        params2,
         images,
         command.image.map(ImageOrTexture::Image),
         command.glyph_texture,
@@ -814,7 +910,7 @@ fn stencil_stroke(
             stencil_reference: 0,
         },
         Some(wgpu::Face::Back),
-        &params1,
+        params1,
         images,
         command.image.map(ImageOrTexture::Image),
         command.glyph_texture,
@@ -852,7 +948,7 @@ fn stencil_stroke(
             stencil_reference: 0,
         },
         Some(wgpu::Face::Back),
-        &params1,
+        params1,
         images,
         command.image.map(ImageOrTexture::Image),
         command.glyph_texture,
@@ -867,11 +963,12 @@ fn stencil_stroke(
 
 fn stroke(
     command: &super::Command,
+    params: &Range<usize>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
-    params: Params,
     images: &mut ImageStore<Image>,
 ) {
+    let params = params.start;
     for drawable in &command.drawables {
         let Some((start, count)) = drawable.stroke_verts else {
             continue;
@@ -882,7 +979,7 @@ fn stroke(
             wgpu::PrimitiveTopology::TriangleStrip,
             StencilTest::Disabled,
             Some(wgpu::Face::Back),
-            &params,
+            params,
             images,
             command.image.map(ImageOrTexture::Image),
             command.glyph_texture,
@@ -893,12 +990,13 @@ fn stroke(
 
 fn concave_fill(
     command: &super::Command,
+    params: &Range<usize>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
-    stencil_params: &Params,
     images: &mut ImageStore<Image>,
-    fill_params: &Params,
 ) {
+    let stencil_params = params.start;
+    let fill_params = params.start + 1;
     if command.drawables.iter().any(|drawable| drawable.fill_verts.is_some()) {
         pipeline_and_bindgroup_mapper.update_renderpass(
             render_pass_builder,
@@ -1026,11 +1124,13 @@ fn concave_fill(
 
 fn convex_fill(
     command: &super::Command,
+    params: &Range<usize>,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
-    params: &Params,
     images: &mut ImageStore<Image>,
 ) {
+    let params = params.start;
+
     let blend_state = blend_state(command).into();
 
     for drawable in &command.drawables {
@@ -1067,23 +1167,14 @@ fn convex_fill(
 }
 
 fn clear_rect(
+    all_params: &Range<usize>,
     images: &mut ImageStore<Image>,
-    color: crate::Color,
     command: &super::Command,
     pipeline_and_bindgroup_mapper: &mut CommandToPipelineAndBindGroupMapper,
     render_pass_builder: &mut RenderPassBuilder<'_>,
 ) {
-    let mut params = Params::new(
-        images,
-        &Default::default(),
-        &crate::paint::PaintFlavor::Color(color),
-        &Default::default(),
-        &Scissor::default(),
-        0.,
-        0.,
-        0.,
-    );
-    params.shader_type = ShaderType::FillColorUnclipped;
+    let params = all_params.start;
+
     if let Some((start, count)) = command.triangles_verts {
         pipeline_and_bindgroup_mapper.update_renderpass(
             render_pass_builder,
@@ -1102,7 +1193,7 @@ fn clear_rect(
             wgpu::PrimitiveTopology::TriangleList,
             StencilTest::Disabled, // ### clear stencil mask
             None,
-            &params,
+            params,
             images,
             None,
             Default::default(),
@@ -1262,7 +1353,7 @@ enum ImageOrTexture {
 struct BindGroupState {
     image: Option<ImageOrTexture>,
     glyph_texture: GlyphTexture,
-    uniforms: UniformArray,
+    params_index: usize,
 }
 
 impl BindGroupState {
@@ -1273,9 +1364,10 @@ impl BindGroupState {
         bind_group_layout: &wgpu::BindGroupLayout,
         empty_texture: &Rc<wgpu::Texture>,
     ) -> wgpu::BindGroup {
+        let tmp: i32 = self.params_index as _;
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Fragment Uniform Buffer"),
-            contents: bytemuck::cast_slice(self.uniforms.as_slice()),
+            contents: bytemuck::cast_slice(&[tmp]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -1335,6 +1427,7 @@ struct RenderPassBuilder<'a> {
     screen_surface_format: wgpu::TextureFormat,
     stencil_buffer_for_textures: &'a mut HashMap<Rc<wgpu::Texture>, Rc<wgpu::Texture>>,
     viewport_bind_group: wgpu::BindGroup,
+    params_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> RenderPassBuilder<'a> {
@@ -1344,12 +1437,37 @@ impl<'a> RenderPassBuilder<'a> {
         screen_surface_format: wgpu::TextureFormat,
         screen_view: [f32; 2],
         viewport_bind_group_layout: Rc<wgpu::BindGroupLayout>,
+        params_bind_group_layout: Rc<wgpu::BindGroupLayout>,
         stencil_buffer_for_textures: &'a mut HashMap<Rc<wgpu::Texture>, Rc<wgpu::Texture>>,
         texture_view: Rc<wgpu::TextureView>,
         stencil_buffer: Rc<wgpu::Texture>,
         vertex_buffer: wgpu::Buffer,
+        uniforms: &[Params],
     ) -> Self {
         let viewport_bind_group = Self::create_viewport_bind_group(&device, &screen_view, &viewport_bind_group_layout);
+
+        let mut tmp: Vec<u8> = Vec::new();
+        for p in uniforms.iter() {
+            let a = UniformArray::from(p);
+            let b = bytemuck::cast_slice(a.as_slice());
+            tmp.extend(b.into_iter());
+        }
+
+        let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Params array buffer"),
+            contents: &tmp,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
+        });
+
+        let params_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &params_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: params_buffer.as_entire_binding(),
+            }],
+            label: None,
+        });
+
         Self {
             device: device.clone(),
             encoder,
@@ -1368,6 +1486,7 @@ impl<'a> RenderPassBuilder<'a> {
             screen_surface_format,
             stencil_buffer_for_textures,
             viewport_bind_group,
+            params_bind_group,
         }
     }
 
@@ -1540,6 +1659,7 @@ impl<'a> RenderPassBuilder<'a> {
         rpass.set_viewport(0., 0., self.viewport[0], self.viewport[1], 0., 0.);
         self.current_bind_group_state.take();
         rpass.set_bind_group(0, &self.viewport_bind_group, &[]);
+        rpass.set_bind_group(2, &self.params_bind_group, &[]);
         self.rpass = Some(rpass.forget_lifetime());
     }
 
@@ -1558,6 +1678,8 @@ struct CommandToPipelineAndBindGroupMapper {
     bind_group_layout: Rc<wgpu::BindGroupLayout>,
     pipeline_cache: Rc<RefCell<HashMap<PipelineState, CachedPipeline>>>,
     pipeline_layout: Rc<wgpu::PipelineLayout>,
+
+    uniforms: Vec<Params>,
 }
 
 impl CommandToPipelineAndBindGroupMapper {
@@ -1568,6 +1690,7 @@ impl CommandToPipelineAndBindGroupMapper {
         bind_group_layout: Rc<wgpu::BindGroupLayout>,
         pipeline_layout: Rc<wgpu::PipelineLayout>,
         pipeline_cache: Rc<RefCell<HashMap<PipelineState, CachedPipeline>>>,
+        uniforms: Vec<Params>,
     ) -> Self {
         Self {
             device: device.clone(),
@@ -1578,6 +1701,7 @@ impl CommandToPipelineAndBindGroupMapper {
             bind_group_layout,
             pipeline_cache,
             pipeline_layout,
+            uniforms,
         }
     }
 
@@ -1588,7 +1712,7 @@ impl CommandToPipelineAndBindGroupMapper {
         primitive_topology: wgpu::PrimitiveTopology,
         stencil_test: StencilTest,
         cull_mode: Option<wgpu::Face>,
-        params: &Params,
+        params_index: usize,
         images: &'a ImageStore<Image>,
         image: Option<ImageOrTexture>,
         glyph_texture: GlyphTexture,
@@ -1601,10 +1725,12 @@ impl CommandToPipelineAndBindGroupMapper {
             render_pass.set_stencil_reference(0);
         }
 
+        let params = &self.uniforms[params_index];
+
         let bind_group_state = BindGroupState {
             image,
             glyph_texture,
-            uniforms: UniformArray::from(params),
+            params_index,
         };
 
         if self.current_bind_group_state != Some(bind_group_state.clone()) {
