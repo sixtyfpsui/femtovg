@@ -1272,6 +1272,7 @@ impl BindGroupState {
         images: &ImageStore<Image>,
         bind_group_layout: &wgpu::BindGroupLayout,
         empty_texture: &Rc<wgpu::Texture>,
+        sampler_for_flags: &mut HashMap<crate::ImageFlags, wgpu::Sampler>,
     ) -> wgpu::BindGroup {
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Fragment Uniform Buffer"),
@@ -1279,13 +1280,19 @@ impl BindGroupState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let (main_texture_view, main_sampler) =
-            RenderPassBuilder::create_texture_view_and_sampler(device, images, self.image.as_ref(), empty_texture);
+        let (main_texture_view, main_sampler) = RenderPassBuilder::create_texture_view_and_sampler(
+            device,
+            images,
+            self.image.as_ref(),
+            empty_texture,
+            sampler_for_flags,
+        );
         let (glyph_texture_view, glyph_sampler) = RenderPassBuilder::create_texture_view_and_sampler(
             device,
             images,
             self.glyph_texture.image_id().map(ImageOrTexture::Image).as_ref(),
             empty_texture,
+            sampler_for_flags,
         );
 
         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1335,6 +1342,7 @@ struct RenderPassBuilder<'a> {
     screen_surface_format: wgpu::TextureFormat,
     stencil_buffer_for_textures: &'a mut HashMap<Rc<wgpu::Texture>, Rc<wgpu::Texture>>,
     viewport_bind_group: wgpu::BindGroup,
+    sampler_for_flags: HashMap<crate::ImageFlags, wgpu::Sampler>,
 }
 
 impl<'a> RenderPassBuilder<'a> {
@@ -1368,6 +1376,7 @@ impl<'a> RenderPassBuilder<'a> {
             screen_surface_format,
             stencil_buffer_for_textures,
             viewport_bind_group,
+            sampler_for_flags: Default::default(),
         }
     }
 
@@ -1411,6 +1420,7 @@ impl<'a> RenderPassBuilder<'a> {
         images: &ImageStore<Image>,
         image: Option<&ImageOrTexture>,
         empty_texture: &Rc<wgpu::Texture>,
+        sampler_for_flags: &mut HashMap<crate::ImageFlags, wgpu::Sampler>,
     ) -> (wgpu::TextureView, wgpu::Sampler) {
         let texture_and_flags = image.and_then(|image_or_texture| match image_or_texture {
             ImageOrTexture::Image(image_id) => images.get(*image_id).map(|img| (img.texture.clone(), img.info.flags())),
@@ -1423,30 +1433,32 @@ impl<'a> RenderPassBuilder<'a> {
 
         let flags = texture_and_flags.map_or(crate::ImageFlags::empty(), |(_, flags)| flags);
 
-        let filter_mode = if flags.contains(crate::ImageFlags::NEAREST) {
-            wgpu::FilterMode::Nearest
-        } else {
-            wgpu::FilterMode::Linear
-        };
+        let sampler = sampler_for_flags.entry(flags).or_insert_with(|| {
+            let filter_mode = if flags.contains(crate::ImageFlags::NEAREST) {
+                wgpu::FilterMode::Nearest
+            } else {
+                wgpu::FilterMode::Linear
+            };
 
-        // ### Share
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: if flags.contains(crate::ImageFlags::REPEAT_X) {
-                wgpu::AddressMode::Repeat
-            } else {
-                wgpu::AddressMode::ClampToEdge
-            },
-            address_mode_v: if flags.contains(crate::ImageFlags::REPEAT_Y) {
-                wgpu::AddressMode::Repeat
-            } else {
-                wgpu::AddressMode::ClampToEdge
-            },
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: filter_mode,
-            min_filter: filter_mode,
-            ..Default::default()
+            device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: if flags.contains(crate::ImageFlags::REPEAT_X) {
+                    wgpu::AddressMode::Repeat
+                } else {
+                    wgpu::AddressMode::ClampToEdge
+                },
+                address_mode_v: if flags.contains(crate::ImageFlags::REPEAT_Y) {
+                    wgpu::AddressMode::Repeat
+                } else {
+                    wgpu::AddressMode::ClampToEdge
+                },
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: filter_mode,
+                min_filter: filter_mode,
+                ..Default::default()
+            })
         });
-        (texture_view, sampler)
+
+        (texture_view, sampler.clone())
     }
 
     fn set_render_target_texture(
@@ -1609,7 +1621,13 @@ impl CommandToPipelineAndBindGroupMapper {
 
         if self.current_bind_group_state != Some(bind_group_state.clone()) {
             self.current_bind_group = bind_group_state
-                .materialize(&self.device, images, &self.bind_group_layout, &self.empty_texture)
+                .materialize(
+                    &self.device,
+                    images,
+                    &self.bind_group_layout,
+                    &self.empty_texture,
+                    &mut render_pass_builder.sampler_for_flags,
+                )
                 .into();
             self.current_bind_group_state = Some(bind_group_state);
         }
